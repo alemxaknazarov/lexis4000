@@ -136,7 +136,7 @@ export default async function handler(req: any, res: any) {
             [
               {
                 text: '🌐 Saytga kirish',
-                url: 'https://lexis.uz/login'
+                url: 'https://lexis4000.uz/login'
               }
             ]
           ]
@@ -249,7 +249,7 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
         [
           {
             text: '🌐 Saytga kirish',
-            url: 'https://lexis.uz/login'
+            url: 'https://lexis4000.uz/login'
           }
         ]
       ]

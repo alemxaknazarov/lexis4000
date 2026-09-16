@@ -123,7 +123,7 @@ async function handleUpdate(update: any) {
           [
             {
               text: '🌐 Saytga kirish',
-              url: 'https://lexis.uz/login'
+              url: 'https://lexis4000.uz/login'
             }
           ]
         ]
@@ -299,7 +299,7 @@ async function startCodeSession(chatId: number, from: any, phoneNumber: string, 
         [
           {
             text: '🌐 Saytga kirish',
-            url: 'https://lexis.uz/login'
+            url: 'https://lexis4000.uz/login'
           }
         ]
       ]
