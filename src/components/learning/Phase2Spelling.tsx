@@ -3,6 +3,7 @@ import { Check, RotateCcw, Sparkles } from 'lucide-react';
 import type { Word } from '../../lib/supabase';
 import { sounds } from '../../utils/soundEffects';
 import { stopAudio } from '../../utils/speech';
+import { recordMistake, removeMistake } from '../../utils/mistakeManager';
 
 interface Phase2SpellingProps {
   words: Word[];
@@ -46,6 +47,9 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
     if (userInput.trim().toLowerCase() === targetClean) {
       setStatus('correct');
       sounds.playCorrect();
+      if (!mistakeWordIds.has(currentWord.id)) {
+        removeMistake(currentWord.id);
+      }
 
       setTimeout(() => {
         const nextQueue = queue.slice(1);
@@ -60,6 +64,7 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
       setStatus('wrong');
       setShowAnswer(true);
       sounds.playWrong();
+      recordMistake(currentWord);
       setMistakeWordIds((prev) => new Set(prev).add(currentWord.id));
 
       setTimeout(() => {

@@ -1,24 +1,25 @@
 import type { UserProfile } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 
-// 24 hours in milliseconds (1 full day)
-export const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+// 30 days in milliseconds
+export const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const SESSION_KEYS = {
   PROFILE: 'lexis_user_profile',
   TIMESTAMP: 'lexis_session_timestamp',
   XP: 'lexis_xp',
   STREAK: 'lexis_streak',
+  LAST_STUDY_DATE: 'lexis_last_study_date',
   COOKIE_NAME: 'lexis_session'
 };
 
 /**
- * Sets session cookie with 24 hour expiry
+ * Sets session cookie with 30-day expiry
  */
 function setSessionCookie() {
   if (typeof document === 'undefined') return;
   try {
-    document.cookie = `${SESSION_KEYS.COOKIE_NAME}=active; max-age=86400; path=/; SameSite=Lax`;
+    document.cookie = `${SESSION_KEYS.COOKIE_NAME}=active; max-age=2592000; path=/; SameSite=Lax`;
   } catch (_) {}
 }
 
@@ -33,7 +34,7 @@ function clearSessionCookie() {
 }
 
 /**
- * Saves user session to LocalStorage and Cookie with fresh 24-hour timestamp
+ * Saves user session to LocalStorage and Cookie with fresh timestamp
  */
 export function saveSession(profile: UserProfile) {
   if (typeof window === 'undefined') return;
@@ -47,6 +48,9 @@ export function saveSession(profile: UserProfile) {
     }
     if (typeof profile.streak_days === 'number') {
       localStorage.setItem(SESSION_KEYS.STREAK, profile.streak_days.toString());
+    }
+    if (profile.last_study_date) {
+      localStorage.setItem(SESSION_KEYS.LAST_STUDY_DATE, profile.last_study_date);
     }
 
     setSessionCookie();

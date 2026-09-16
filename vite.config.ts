@@ -8,4 +8,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://www.lexis4000.uz',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 })

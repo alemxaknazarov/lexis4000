@@ -99,7 +99,8 @@ export default async function handler(req: any, res: any) {
               full_name: fullName,
               username: from.username || null,
               total_xp: 0,
-              streak_days: 1
+              streak_days: 1,
+              last_study_date: new Date().toLocaleDateString('en-CA')
             }
           ])
           .select()
@@ -112,7 +113,7 @@ export default async function handler(req: any, res: any) {
           .eq('telegram_id', from.id);
       }
 
-      await generateAndSendCode(chatId, from, phoneNumber, fullName);
+      await generateAndSendCode(chatId, from, phoneNumber, fullName, msg.message_id);
       return res.status(200).json({ ok: true });
     }
 
@@ -169,11 +170,11 @@ export default async function handler(req: any, res: any) {
         .update({ used: true })
         .eq('id', expiredCodes[0].id);
 
-      // If previous message id was tracked in last_name, delete it
+      // If previous message ids were tracked in last_name, delete them
       if (expiredCodes[0].last_name && expiredCodes[0].last_name.startsWith('msg_')) {
-        const prevMsgId = parseInt(expiredCodes[0].last_name.replace('msg_', ''), 10);
-        if (!isNaN(prevMsgId)) {
-          await deleteTelegramMessage(chatId, prevMsgId);
+        const ids = expiredCodes[0].last_name.replace('msg_', '').split('_').map(Number).filter(Boolean);
+        for (const mId of ids) {
+          await deleteTelegramMessage(chatId, mId);
         }
       }
 
@@ -195,7 +196,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({ ok: true });
       }
 
-      await generateAndSendCode(chatId, from, userProfile.phone_number || '', userProfile.full_name);
+      await generateAndSendCode(chatId, from, userProfile.phone_number || '', userProfile.full_name, msg.message_id);
       return res.status(200).json({ ok: true });
     }
 
@@ -228,19 +229,37 @@ export default async function handler(req: any, res: any) {
   }
 }
 
-async function generateAndSendCode(chatId: number, from: any, phoneNumber: string, fullName: string) {
+async function generateAndSendCode(chatId: number, from: any, phoneNumber: string, fullName: string, userMsgId?: number) {
   // 1. Remove keyboard immediately
   const removeMsg = await sendTelegramMessage(chatId, '⏳', { remove_keyboard: true });
   if (removeMsg?.result?.message_id) {
     await deleteTelegramMessage(chatId, removeMsg.result.message_id);
   }
 
-  // 2. Expire any previous unexpired codes
-  await supabase
-    .from('telegram_auth_codes')
-    .update({ used: true })
-    .eq('telegram_id', from.id)
-    .eq('used', false);
+  // 2. Clean up any previous unexpired code messages in chat
+  try {
+    const { data: prevCodes } = await supabase
+      .from('telegram_auth_codes')
+      .select('id, last_name')
+      .eq('telegram_id', from.id)
+      .eq('used', false);
+
+    if (prevCodes && prevCodes.length > 0) {
+      for (const pc of prevCodes) {
+        if (pc.last_name && pc.last_name.startsWith('msg_')) {
+          const ids = pc.last_name.replace('msg_', '').split('_').map(Number).filter(Boolean);
+          for (const mId of ids) {
+            await deleteTelegramMessage(chatId, mId);
+          }
+        }
+      }
+      await supabase
+        .from('telegram_auth_codes')
+        .update({ used: true })
+        .eq('telegram_id', from.id)
+        .eq('used', false);
+    }
+  } catch (_) {}
 
   // 3. Generate 6-digit code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -264,6 +283,10 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
   );
 
   const sentMessageId = sentMsg?.result?.message_id;
+  const msgIds: number[] = [];
+  if (sentMessageId) msgIds.push(sentMessageId);
+  if (userMsgId) msgIds.push(userMsgId);
+  const msgTracker = msgIds.length > 0 ? `msg_${msgIds.join('_')}` : '';
 
   // 5. Save into database
   await supabase
@@ -274,7 +297,7 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
         telegram_id: from.id,
         phone_number: phoneNumber,
         first_name: from.first_name,
-        last_name: sentMessageId ? `msg_${sentMessageId}` : '',
+        last_name: msgTracker,
         username: from.username || '',
         expires_at: expiresAt,
         used: false

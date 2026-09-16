@@ -22,7 +22,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, username, avatar_url, total_xp, streak_days')
         .order('total_xp', { ascending: false })
         .limit(20);
 

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, AlertCircle, CheckCircle2, RefreshCw, Sun, Moon, ArrowLeft, Trophy } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../lib/supabase';
 import { sounds } from '../utils/soundEffects';
 import { saveSession } from '../utils/sessionManager';
+import { verifyTelegramOtp } from '../utils/telegramAuth';
 
 interface LoginPageProps {
   onSuccess: (profile: UserProfile) => void;
@@ -88,81 +88,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setErrorMsg(null);
 
     try {
-      const nowIso = new Date().toISOString();
-      const { data: codeRecord, error: codeErr } = await supabase
-        .from('telegram_auth_codes')
-        .select('*')
-        .eq('code', code)
-        .eq('used', false)
-        .gt('expires_at', nowIso)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (codeErr || !codeRecord) {
-        throw new Error('Kod noto‘g‘ri yoki muddati (3 daqiqa) tugagan. Botdan yangi kod oling.');
-      }
-
-      // Mark code as used
-      await supabase
-        .from('telegram_auth_codes')
-        .update({ used: true })
-        .eq('id', codeRecord.id);
-
-      // Notify Telegram user of successful login & restore keyboard via serverless endpoint
-      try {
-        let prevMsgId: number | undefined;
-        if (codeRecord.last_name && codeRecord.last_name.startsWith('msg_')) {
-          const parsed = parseInt(codeRecord.last_name.replace('msg_', ''), 10);
-          if (!isNaN(parsed)) prevMsgId = parsed;
-        }
-        fetch('/api/notify-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            telegram_id: codeRecord.telegram_id,
-            message_id: prevMsgId
-          })
-        }).catch(() => {});
-      } catch (_) {}
-
-      // Fetch or create profile
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('telegram_id', codeRecord.telegram_id)
-        .maybeSingle();
-
-      let finalProfile: UserProfile;
-
-      if (existingUser) {
-        finalProfile = existingUser;
-      } else {
-        const fullName = `${codeRecord.first_name || ''} ${codeRecord.last_name || ''}`.trim() ||
-          codeRecord.username ||
-          'O‘quvchi';
-
-        const { data: newUser, error: createErr } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              telegram_id: codeRecord.telegram_id,
-              phone_number: codeRecord.phone_number,
-              full_name: fullName,
-              username: codeRecord.username || null,
-              total_xp: 0,
-              streak_days: 1
-            }
-          ])
-          .select()
-          .single();
-
-        if (createErr || !newUser) {
-          throw new Error('Profil yaratishda xatolik yuz berdi.');
-        }
-        finalProfile = newUser;
-      }
-
+      const finalProfile = await verifyTelegramOtp(code);
       saveSession(finalProfile);
 
       sounds.playCorrect();

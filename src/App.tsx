@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { Book, Word, UserProfile, UnitProgress } from './lib/supabase';
-import { BOOK_1_WORDS } from './data/book1Words';
-import { BOOK_2_WORDS } from './data/book2Words';
-import { BOOK_3_WORDS } from './data/book3Words';
-import { BOOK_4_WORDS } from './data/book4Words';
-import { BOOK_5_WORDS } from './data/book5Words';
-import { BOOK_6_WORDS } from './data/book6Words';
+import { loadBookWords } from './data/wordLoader';
 import { Navbar } from './components/Navbar';
 import { BookCatalog } from './components/BookCatalog';
 import { UnitSelector } from './components/UnitSelector';
@@ -20,13 +15,14 @@ import { Phase5Visual } from './components/learning/Phase5Visual';
 import { Phase6Summary } from './components/learning/Phase6Summary';
 import { AuthModal } from './components/AuthModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
+import { MistakesModal } from './components/MistakesModal';
 import { LoginPage } from './components/LoginPage';
 import { ProfilePage } from './components/ProfilePage';
 import { resolveRoute, routes, type AppView } from './router/routes';
 import { stopAudio } from './utils/speech';
 import { loadValidSession, saveSession, touchSession, clearSession } from './utils/sessionManager';
-
-const DEFAULT_WORDS: Word[] = [...BOOK_1_WORDS, ...BOOK_2_WORDS, ...BOOK_3_WORDS, ...BOOK_4_WORDS, ...BOOK_5_WORDS, ...BOOK_6_WORDS];
+import { checkAndUpdateStreak, recordStudyActivity } from './utils/streakManager';
+import { getMistakeCount } from './utils/mistakeManager';
 
 export function App() {
   // Theme State (Default: light Scandinavian canvas with dark mode toggle)
@@ -126,7 +122,22 @@ export function App() {
     { id: 5, book_number: 5, title: 'Book 5 - Advanced', total_units: 30 },
     { id: 6, book_number: 6, title: 'Book 6 - Master', total_units: 30 },
   ]);
-  const [allWords, setAllWords] = useState<Word[]>(DEFAULT_WORDS);
+  const [allWords, setAllWords] = useState<Word[]>([]);
+
+  // Dynamically load words for the selected book on demand (Code Splitting)
+  useEffect(() => {
+    let isMounted = true;
+    loadBookWords(selectedBook)
+      .then((words) => {
+        if (isMounted) {
+          setAllWords(words);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBook]);
   const [selectedWords, setSelectedWords] = useState<Word[]>([]);
 
   // Gamification State
@@ -162,6 +173,14 @@ export function App() {
   const [sessionWordPoints, setSessionWordPoints] = useState<Record<string, number>>({});
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
+  const [isMistakesOpen, setIsMistakesOpen] = useState<boolean>(false);
+  const [mistakeCount, setMistakeCount] = useState<number>(() => getMistakeCount());
+
+  useEffect(() => {
+    const handleUpdate = () => setMistakeCount(getMistakeCount());
+    window.addEventListener('lexis_mistakes_updated', handleUpdate);
+    return () => window.removeEventListener('lexis_mistakes_updated', handleUpdate);
+  }, []);
 
   // Stop audio on view changes
   useEffect(() => {
@@ -252,8 +271,11 @@ export function App() {
             total_xp: xp,
             streak_days: streak
           };
-          saveSession(profile);
-          setUserProfile(profile);
+          const streakRes = await checkAndUpdateStreak(profile, streak);
+          const finalProf = streakRes.profile || profile;
+          saveSession(finalProf);
+          setUserProfile(finalProf);
+          setStreak(streakRes.streak);
         } else {
           // If no Supabase OAuth session, check Telegram session in localStorage
           const current = loadValidSession();
@@ -265,27 +287,29 @@ export function App() {
                 .eq('id', current.id)
                 .maybeSingle();
 
-              if (dbProfile) {
-                const updatedProfile = {
-                  ...current,
-                  ...dbProfile
-                };
-                saveSession(updatedProfile);
-                setUserProfile(updatedProfile);
-                if (typeof updatedProfile.total_xp === 'number') {
-                  setXp(updatedProfile.total_xp);
-                }
-                if (typeof updatedProfile.streak_days === 'number') {
-                  setStreak(updatedProfile.streak_days);
-                }
+              const baseProfile: UserProfile = dbProfile ? { ...current, ...dbProfile } : current;
+              const streakRes = await checkAndUpdateStreak(baseProfile, streak);
+              const updatedProfile = streakRes.profile || baseProfile;
+
+              saveSession(updatedProfile);
+              setUserProfile(updatedProfile);
+              if (typeof updatedProfile.total_xp === 'number') {
+                setXp(updatedProfile.total_xp);
               }
+              setStreak(streakRes.streak);
             } catch (err) {
               console.warn('Profiles sync error:', err);
             }
+          } else {
+            // Guest mode: check streak in localStorage
+            const guestStreakRes = await checkAndUpdateStreak(null, streak);
+            setStreak(guestStreakRes.streak);
           }
         }
       } catch (e) {
         console.warn('Guest mode');
+        const guestStreakRes = await checkAndUpdateStreak(null, streak);
+        setStreak(guestStreakRes.streak);
       }
     };
     checkUser();
@@ -337,6 +361,13 @@ export function App() {
     setXp(newXp);
     localStorage.setItem('lexis_xp', newXp.toString());
 
+    // Record study activity to lock streak for today
+    const studyRes = await recordStudyActivity(userProfile, streak);
+    if (studyRes.profile) {
+      setUserProfile(studyRes.profile);
+    }
+    setStreak(studyRes.streak);
+
     if (userProfile) {
       try {
         await supabase.from('user_unit_progress').upsert({
@@ -348,7 +379,9 @@ export function App() {
         });
 
         await supabase.from('profiles').update({
-          total_xp: newXp
+          total_xp: newXp,
+          streak_days: studyRes.streak,
+          last_study_date: studyRes.profile?.last_study_date
         }).eq('id', userProfile.id);
       } catch (err) {
         console.error('Failed to sync to Supabase:', err);
@@ -430,8 +463,11 @@ export function App() {
   };
 
   const handleAuthSuccess = async (profile: UserProfile) => {
-    saveSession(profile);
-    setUserProfile(profile);
+    const streakRes = await checkAndUpdateStreak(profile, streak);
+    const finalProfile = streakRes.profile || profile;
+
+    saveSession(finalProfile);
+    setUserProfile(finalProfile);
     setIsAuthOpen(false);
 
     // Return to previous location if user was redirected from unauthenticated study attempt
@@ -443,12 +479,10 @@ export function App() {
       navigateToHome();
     }
 
-    if (typeof profile.total_xp === 'number') {
-      setXp(profile.total_xp);
+    if (typeof finalProfile.total_xp === 'number') {
+      setXp(finalProfile.total_xp);
     }
-    if (typeof profile.streak_days === 'number') {
-      setStreak(profile.streak_days);
-    }
+    setStreak(streakRes.streak);
 
     try {
       const { data } = await supabase
@@ -529,6 +563,8 @@ export function App() {
         onOpenAuth={navigateToLogin}
         onOpenProfile={navigateToProfile}
         onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+        mistakeCount={mistakeCount}
+        onOpenMistakes={() => setIsMistakesOpen(true)}
         xp={xp}
         streak={streak}
         isDark={isDark}
@@ -790,6 +826,13 @@ export function App() {
         isOpen={isLeaderboardOpen}
         onClose={() => setIsLeaderboardOpen(false)}
         currentUser={userProfile}
+      />
+
+      {/* Mistakes Practice Modal */}
+      <MistakesModal
+        isOpen={isMistakesOpen}
+        onClose={() => setIsMistakesOpen(false)}
+        onStartPractice={(words) => handleStartLearning(words)}
       />
 
       {/* Telegram Auth Modal */}

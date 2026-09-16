@@ -3,6 +3,7 @@ import { Volume2, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
 import type { Word } from '../../lib/supabase';
 import { speakWord, stopAudio } from '../../utils/speech';
 import { sounds } from '../../utils/soundEffects';
+import { recordMistake, removeMistake } from '../../utils/mistakeManager';
 
 interface Phase3QuizProps {
   words: Word[];
@@ -58,8 +59,12 @@ export const Phase3Quiz: React.FC<Phase3QuizProps> = ({
     let updatedMissed = missedWords;
     if (isCorrect) {
       sounds.playCorrect();
+      if (round === 1) {
+        removeMistake(currentWord.id);
+      }
     } else {
       sounds.playWrong();
+      recordMistake(currentWord);
       if (round === 1) {
         if (!missedWords.some((w) => w.id === currentWord.id)) {
           updatedMissed = [...missedWords, currentWord];

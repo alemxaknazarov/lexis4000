@@ -1,4 +1,4 @@
-import { Flame, Award, Sun, Moon, User, Trophy } from 'lucide-react';
+import { Trophy, Award, Flame, User, Sun, Moon, AlertTriangle } from 'lucide-react';
 import type { UserProfile } from '../lib/supabase';
 
 interface NavbarProps {
@@ -9,6 +9,8 @@ interface NavbarProps {
   onOpenAuth: () => void;
   onOpenProfile: () => void;
   onOpenLeaderboard: () => void;
+  mistakeCount?: number;
+  onOpenMistakes?: () => void;
   xp: number;
   streak: number;
   isDark: boolean;
@@ -23,6 +25,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   onOpenProfile,
   onOpenLeaderboard,
+  mistakeCount = 0,
+  onOpenMistakes,
   xp,
   streak,
   isDark,
@@ -71,6 +75,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="font-mono text-[11px] sm:text-xs">{xp}</span>
             <span className="hidden sm:inline font-normal text-slate-400">XP</span>
           </div>
+
+          {/* Mistakes review trigger */}
+          {mistakeCount > 0 && onOpenMistakes && (
+            <button
+              onClick={onOpenMistakes}
+              title={`${mistakeCount} ta xato qilingan so‘z mavjud`}
+              className="flex items-center gap-0.5 sm:gap-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-800/60 text-rose-700 dark:text-rose-400 px-1.5 py-0.5 sm:py-1 rounded-lg text-xs font-semibold hover:bg-rose-100 dark:hover:bg-rose-900/50 transition cursor-pointer shrink-0 animate-pulse"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <span className="font-mono text-[11px] sm:text-xs">{mistakeCount}</span>
+              <span className="hidden sm:inline font-normal">xato</span>
+            </button>
+          )}
 
           {/* Leaderboard Trophy Button */}
           <button
