@@ -1,0 +1,28 @@
+# Nginx configuration for LEXIS 4000 (lexis4000.uz)
+# Handles Single Page Application (SPA) routing middleware so URLs like
+# /book/1/unit/5 or /profile do not return 404.
+
+server {
+    listen 80;
+    server_name lexis4000.uz www.lexis4000.uz;
+
+    root /var/www/lexis-4000/dist;
+    index index.html;
+
+    # Gzip Compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+
+    # SPA Routing Middleware (Fallback all routes to index.html)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Static Assets Caching (1 year)
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|woff2?|eot|ttf|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    error_page 404 /index.html;
+}
