@@ -108,30 +108,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         .update({ used: true })
         .eq('id', codeRecord.id);
 
-      // Notify Telegram user of successful login & restore keyboard
+      // Notify Telegram user of successful login & restore keyboard via serverless endpoint
       try {
-        const TELEGRAM_BOT_TOKEN = '8660002918:AAGasNFqfF-RzxA0IyfvdsFWUFKjgA2VmFQ';
+        let prevMsgId: number | undefined;
         if (codeRecord.last_name && codeRecord.last_name.startsWith('msg_')) {
-          const prevMsgId = parseInt(codeRecord.last_name.replace('msg_', ''), 10);
-          if (!isNaN(prevMsgId)) {
-            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: codeRecord.telegram_id, message_id: prevMsgId })
-            }).catch(() => {});
-          }
+          const parsed = parseInt(codeRecord.last_name.replace('msg_', ''), 10);
+          if (!isNaN(parsed)) prevMsgId = parsed;
         }
-        fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        fetch('/api/notify-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: codeRecord.telegram_id,
-            text: '🎉 <b>Tizimga kirganingiz bilan tabriklaymiz!</b>',
-            parse_mode: 'HTML',
-            reply_markup: {
-              keyboard: [[{ text: '🔑 Kirish kodini olish' }]],
-              resize_keyboard: true
-            }
+            telegram_id: codeRecord.telegram_id,
+            message_id: prevMsgId
           })
         }).catch(() => {});
       } catch (_) {}
