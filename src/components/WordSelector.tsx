@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, CheckSquare, Square, Volume2, Play, Sparkles } from 'lucide-react';
 import type { Word } from '../lib/supabase';
-import { speakWord, stopAudio } from '../utils/speech';
+import { speakWord, stopAudio, preloadWordAudios } from '../utils/speech';
 
 interface WordSelectorProps {
   bookNumber: number;
@@ -40,11 +40,19 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
 
   // Default: load saved selection if any, else empty Set
   const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(loadSavedWordIds);
+  const [playingWordId, setPlayingWordId] = useState<string | null>(null);
 
   // Update selection state when book or unit changes
   useEffect(() => {
     setSelectedWordIds(loadSavedWordIds());
   }, [bookNumber, unitNumber]);
+
+  // Preload all 20 audios for instant zero-lag playback on mobile
+  useEffect(() => {
+    if (words && words.length > 0) {
+      preloadWordAudios(words.map((w) => w.audio_url));
+    }
+  }, [words]);
 
   useEffect(() => {
     stopAudio();
@@ -212,18 +220,27 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                 </div>
               </div>
 
-              {/* Audio Listen Button */}
+              {/* Audio Listen Button with Visual Feedback */}
               <button
                 type="button"
-                onClick={(e) => {
+                onClick={async (e) => {
                   e.stopPropagation();
-                  stopAudio();
-                  speakWord(word.word, word.audio_url);
+                  if (playingWordId === word.id) return;
+                  setPlayingWordId(word.id);
+                  try {
+                    await speakWord(word.word, word.audio_url);
+                  } finally {
+                    setPlayingWordId((curr) => (curr === word.id ? null : curr));
+                  }
                 }}
                 title="Talaffuzni eshitish"
-                className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition shrink-0 cursor-pointer"
+                className={`p-2 rounded-lg transition shrink-0 cursor-pointer ${
+                  playingWordId === word.id
+                    ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 scale-105'
+                    : 'text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95'
+                }`}
               >
-                <Volume2 className="w-4 h-4" />
+                <Volume2 className={`w-4 h-4 ${playingWordId === word.id ? 'animate-pulse text-emerald-600' : ''}`} />
               </button>
             </div>
           );

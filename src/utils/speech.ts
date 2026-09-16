@@ -22,6 +22,23 @@ export const stopAudio = () => {
   }
 };
 
+const audioCache = new Map<string, HTMLAudioElement>();
+
+// Preload audio files for instant playback without network delays
+export const preloadWordAudios = (urls: (string | undefined)[]) => {
+  if (typeof window === 'undefined') return;
+  urls.forEach((url) => {
+    if (url && !audioCache.has(url)) {
+      try {
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = url;
+        audioCache.set(url, audio);
+      } catch (_) {}
+    }
+  });
+};
+
 // Pronounce target word: guaranteed exactly ONCE per call (no duplicates or echoes)
 export const speakWord = (word: string, audioUrl?: string): Promise<void> => {
   stopAudio();
@@ -81,8 +98,15 @@ export const speakWord = (word: string, audioUrl?: string): Promise<void> => {
     // If audioUrl is provided, attempt audio element ONCE
     if (audioUrl) {
       try {
-        const audio = new Audio(audioUrl);
+        let audio = audioCache.get(audioUrl);
+        if (!audio) {
+          audio = new Audio(audioUrl);
+          audio.preload = 'auto';
+          audioCache.set(audioUrl, audio);
+        }
+
         currentAudioElement = audio;
+        audio.currentTime = 0;
 
         audio.onended = () => {
           if (thisId === activeSpeakId) {
@@ -101,9 +125,12 @@ export const speakWord = (word: string, audioUrl?: string): Promise<void> => {
 
         audio.onerror = handleAudioFail;
 
-        audio.play().catch(() => {
-          handleAudioFail();
-        });
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            handleAudioFail();
+          });
+        }
       } catch (_) {
         speakWithSynthesis();
       }
