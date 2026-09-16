@@ -6,7 +6,7 @@ const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ha2IX
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: any) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.error('[Webhook] TELEGRAM_BOT_TOKEN is missing in process.env!');
     return null;
@@ -32,7 +32,7 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: a
 }
 
 async function deleteTelegramMessage(chatId: number, messageId: number) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN;
   if (!token) return null;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
@@ -52,13 +52,18 @@ async function deleteTelegramMessage(chatId: number, messageId: number) {
 export default async function handler(req: any, res: any) {
   // Allow GET request for health check
   if (req.method === 'GET') {
-    const hasToken = !!process.env.TELEGRAM_BOT_TOKEN;
-    const tokenLength = process.env.TELEGRAM_BOT_TOKEN ? process.env.TELEGRAM_BOT_TOKEN.length : 0;
+    const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || '';
+    const hasToken = !!token;
+    const tokenLength = token ? token.length : 0;
+    const matchingEnvKeys = Object.keys(process.env).filter(
+      (k) => k.toLowerCase().includes('tele') || k.toLowerCase().includes('bot') || k.toLowerCase().includes('token')
+    );
     return res.status(200).json({
       status: 'ok',
       service: 'LEXIS 4000 Telegram Webhook',
       hasToken,
-      tokenLength
+      tokenLength,
+      matchingEnvKeys
     });
   }
 

@@ -4,7 +4,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const { telegram_id, message_id } = req.body || {};
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN;
 
   if (!token || !telegram_id) {
     return res.status(400).json({ error: 'Missing token or telegram_id' });
