@@ -5,11 +5,14 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://edxexhujreeckecqb
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ha2IXQ54aPfxHLDSW6RQnA_8Miju1HS';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-
 async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: any) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.error('[Webhook] TELEGRAM_BOT_TOKEN is missing in process.env!');
+    return null;
+  }
   try {
-    const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -19,7 +22,9 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: a
         reply_markup: replyMarkup
       })
     });
-    return await res.json();
+    const result = await res.json();
+    console.log('[Webhook] Telegram send response:', result);
+    return result;
   } catch (err) {
     console.error('[Webhook] Failed to send telegram message:', err);
     return null;
@@ -27,8 +32,10 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: a
 }
 
 async function deleteTelegramMessage(chatId: number, messageId: number) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
   try {
-    const res = await fetch(`${TELEGRAM_API}/deleteMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -45,7 +52,14 @@ async function deleteTelegramMessage(chatId: number, messageId: number) {
 export default async function handler(req: any, res: any) {
   // Allow GET request for health check
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'ok', service: 'LEXIS 4000 Telegram Webhook' });
+    const hasToken = !!process.env.TELEGRAM_BOT_TOKEN;
+    const tokenLength = process.env.TELEGRAM_BOT_TOKEN ? process.env.TELEGRAM_BOT_TOKEN.length : 0;
+    return res.status(200).json({
+      status: 'ok',
+      service: 'LEXIS 4000 Telegram Webhook',
+      hasToken,
+      tokenLength
+    });
   }
 
   if (req.method !== 'POST') {
