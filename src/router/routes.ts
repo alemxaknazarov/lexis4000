@@ -1,6 +1,6 @@
 import type { UserProfile } from '../lib/supabase';
 
-export type AppView = 'catalog' | 'units' | 'words' | 'learning' | 'login' | 'profile';
+export type AppView = 'catalog' | 'units' | 'words' | 'learning' | 'login' | 'profile' | 'leaderboard' | 'mistakes' | 'settings';
 
 export interface RouteResolution {
   view: AppView;
@@ -24,6 +24,18 @@ export function resolveRoute(pathname: string, userProfile: UserProfile | null):
   // 1. Static Routes
   if (cleanPath === '' || cleanPath === '/') {
     return { view: 'catalog', bookNumber: 1, unitNumber: 1 };
+  }
+
+  if (cleanPath === '/leaderboard') {
+    return { view: 'leaderboard', bookNumber: 1, unitNumber: 1 };
+  }
+
+  if (cleanPath === '/mistakes') {
+    return { view: 'mistakes', bookNumber: 1, unitNumber: 1 };
+  }
+
+  if (cleanPath === '/settings') {
+    return { view: 'settings', bookNumber: 1, unitNumber: 1 };
   }
 
   if (cleanPath === '/login') {
@@ -122,6 +134,9 @@ export const routes = {
   catalog: () => '/',
   login: () => '/login',
   profile: () => '/profile',
+  leaderboard: () => '/leaderboard',
+  mistakes: () => '/mistakes',
+  settings: () => '/settings',
   book: (bookNumber: number) => `/book/${bookNumber}`,
   unit: (bookNumber: number, unitNumber: number) => `/book/${bookNumber}/unit/${unitNumber}`,
   learn: (bookNumber: number, unitNumber: number) => `/book/${bookNumber}/unit/${unitNumber}/learn`

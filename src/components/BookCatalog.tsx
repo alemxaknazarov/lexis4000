@@ -14,13 +14,15 @@ export const BookCatalog: React.FC<BookCatalogProps> = ({
   onSelectBook,
   getUnitCompletionCount
 }) => {
+  const track = (typeof window !== 'undefined' ? localStorage.getItem('lexis_learning_track') : 'cefr') || 'cefr';
+
   const levels = [
-    { num: 1, cefr: 'A2', desc: 'Elementary & Basic Vocabulary' },
-    { num: 2, cefr: 'A2-B1', desc: 'Pre-Intermediate Foundations' },
-    { num: 3, cefr: 'B1', desc: 'Intermediate Contextual Fluency' },
-    { num: 4, cefr: 'B1-B2', desc: 'Upper-Intermediate Power Words' },
-    { num: 5, cefr: 'B2', desc: 'Advanced Academic Vocabulary' },
-    { num: 6, cefr: 'B2-C1', desc: 'Master Lexicon (IELTS 7.5+)' },
+    { num: 1, cefr: 'A1-A2', ielts: '3.5 - 4.5', desc: 'Elementary & Basic Vocabulary' },
+    { num: 2, cefr: 'B1', ielts: '4.5 - 5.5', desc: 'Pre-Intermediate Foundations' },
+    { num: 3, cefr: 'B1+', ielts: '5.5 - 6.5', desc: 'Intermediate Contextual Fluency' },
+    { num: 4, cefr: 'B2', ielts: '6.5 - 7.5', desc: 'Upper-Intermediate Power Words' },
+    { num: 5, cefr: 'B2+', ielts: '7.5 - 8.5', desc: 'Advanced Academic Vocabulary' },
+    { num: 6, cefr: 'C1', ielts: '8.5 - 9.0', desc: 'Master Lexicon (IELTS 8.5+)' },
   ];
 
   return (
@@ -70,7 +72,7 @@ export const BookCatalog: React.FC<BookCatalogProps> = ({
                         KITOB {book.book_number}
                       </span>
                       <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        CEFR {meta.cefr}
+                        {track === 'ielts' ? `IELTS ${meta.ielts}` : `CEFR ${meta.cefr}`}
                       </span>
                     </div>
 

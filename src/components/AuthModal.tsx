@@ -12,72 +12,39 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [code, setCode] = useState<string>('');
+  const [isFocused, setIsFocused] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setDigits(['', '', '', '', '', '']);
+      setCode('');
       setErrorMsg(null);
       setSuccessMsg(null);
       setTimeout(() => {
-        inputRefs.current[0]?.focus();
+        inputRef.current?.focus();
       }, 100);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleDigitChange = (index: number, val: string) => {
-    const char = val.replace(/\D/g, '').slice(-1);
-    const newDigits = [...digits];
-    newDigits[index] = char;
-    setDigits(newDigits);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setCode(rawVal);
     setErrorMsg(null);
 
-    // Auto-advance to next box
-    if (char && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // If 6 digits are complete, auto-verify
-    const fullCode = newDigits.join('');
-    if (fullCode.length === 6) {
-      verifyCode(fullCode);
-    }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
-
-    const newDigits = [...digits];
-    for (let i = 0; i < 6; i++) {
-      newDigits[i] = pasted[i] || '';
-    }
-    setDigits(newDigits);
-    setErrorMsg(null);
-
-    if (pasted.length === 6) {
-      verifyCode(pasted);
-    } else {
-      inputRefs.current[Math.min(pasted.length, 5)]?.focus();
+    if (rawVal.length === 6) {
+      verifyCode(rawVal);
     }
   };
 
   const verifyCode = async (codeToVerify?: string) => {
-    const code = codeToVerify || digits.join('');
-    if (code.length !== 6) {
+    const codeVal = codeToVerify || code;
+    if (codeVal.length !== 6) {
       setErrorMsg('Iltimos, 6 xonali tasdiqlash kodini to‘liq kiriting.');
       return;
     }
@@ -86,7 +53,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     setErrorMsg(null);
 
     try {
-      const finalProfile = await verifyTelegramOtp(code);
+      const finalProfile = await verifyTelegramOtp(codeVal);
       saveSession(finalProfile);
 
       sounds.playCorrect();
@@ -154,22 +121,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             2. Botdan olingan 6 xonali kodni kiriting:
           </label>
 
-          <div className="flex items-center justify-center gap-2">
-            {digits.map((digit, idx) => (
-              <input
-                key={idx}
-                ref={(el) => { inputRefs.current[idx] = el; }}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleDigitChange(idx, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(idx, e)}
-                onPaste={handlePaste}
-                disabled={loading}
-                className="w-10 h-12 sm:w-11 sm:h-13 text-center font-mono font-extrabold text-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition"
-              />
-            ))}
+          <div 
+            onClick={() => inputRef.current?.focus()}
+            className="relative flex items-center justify-center gap-2 cursor-text select-none"
+          >
+            {/* Hidden Master Native Input */}
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={handleChange}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              disabled={loading}
+              className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-text"
+              aria-label="6 xonali tasdiqlash kodi"
+            />
+
+            {/* 6 Visual Display Slots */}
+            {[0, 1, 2, 3, 4, 5].map((idx) => {
+              const char = code[idx] || '';
+              const isActive = isFocused && (code.length === idx || (code.length === 6 && idx === 5));
+
+              return (
+                <div
+                  key={idx}
+                  className={`w-10 h-12 sm:w-11 sm:h-13 flex items-center justify-center font-mono font-extrabold text-xl rounded-xl border transition-all duration-150 ${
+                    isActive
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/20 scale-[1.03] bg-white dark:bg-slate-900 text-slate-900 dark:text-white'
+                      : char
+                      ? 'border-emerald-500/80 bg-emerald-50/20 dark:bg-emerald-950/20 text-slate-900 dark:text-white'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white'
+                  }`}
+                >
+                  {char ? (
+                    <span>{char}</span>
+                  ) : isActive ? (
+                    <span className="w-0.5 h-5 bg-emerald-500 animate-pulse" />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -192,9 +188,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         <button
           type="button"
           onClick={() => verifyCode()}
-          disabled={loading || digits.join('').length !== 6}
+          disabled={loading || code.length !== 6}
           className={`w-full py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition cursor-pointer ${
-            digits.join('').length === 6 && !loading
+            code.length === 6 && !loading
               ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
               : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
           }`}

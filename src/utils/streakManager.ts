@@ -32,12 +32,14 @@ export interface StreakEvaluationResult {
 }
 
 /**
- * Evaluates streak status based on previous study date and registration date.
+ * Evaluates streak status purely on site visit (passive check).
+ * Rule: Entering the site does NOT increment streak.
+ * Only if user missed 1 or more days (diff > 1), streak resets to 0.
  */
 export function evaluateStreak(
   currentStreak: number,
   lastStudyDate: string | null | undefined,
-  createdAt?: string | null
+  _createdAt?: string | null
 ): StreakEvaluationResult {
   const todayStr = getLocalDateString();
   let prevDate: string | null = null;
@@ -46,15 +48,13 @@ export function evaluateStreak(
     prevDate = lastStudyDate.includes('T')
       ? getLocalDateString(new Date(lastStudyDate))
       : lastStudyDate;
-  } else if (createdAt) {
-    prevDate = getLocalDateString(new Date(createdAt));
   }
 
-  // If no date reference exists at all, initialize to 1 today
+  // If user has never completed a 5-phase word, streak is 0
   if (!prevDate) {
     return {
-      newStreak: Math.max(1, currentStreak || 1),
-      shouldUpdate: true,
+      newStreak: 0,
+      shouldUpdate: currentStreak !== 0,
       todayStr
     };
   }
@@ -62,30 +62,30 @@ export function evaluateStreak(
   const diff = calculateDaysBetween(prevDate, todayStr);
 
   if (diff === 0) {
-    // Same day visit: keep current streak, but save last_study_date if missing
+    // Already completed today: keep current streak
     return {
-      newStreak: Math.max(1, currentStreak || 1),
-      shouldUpdate: !lastStudyDate,
+      newStreak: currentStreak,
+      shouldUpdate: false,
       todayStr
     };
   } else if (diff === 1) {
-    // Next consecutive day! Increment streak
+    // Completed yesterday: streak is safe at currentStreak, waiting for today's 5-phase completion
     return {
-      newStreak: Math.max(1, currentStreak || 1) + 1,
-      shouldUpdate: true,
+      newStreak: currentStreak,
+      shouldUpdate: false,
       todayStr
     };
   } else if (diff > 1) {
-    // Missed 1 or more full days: reset streak to 1
+    // Missed 1 or more full days: streak resets to 0!
     return {
-      newStreak: 1,
-      shouldUpdate: true,
+      newStreak: 0,
+      shouldUpdate: currentStreak !== 0,
       todayStr
     };
   } else {
-    // Time travel / device clock anomaly (diff < 0): preserve current streak
+    // Clock anomaly (future date)
     return {
-      newStreak: Math.max(1, currentStreak || 1),
+      newStreak: currentStreak,
       shouldUpdate: false,
       todayStr
     };
@@ -93,15 +93,13 @@ export function evaluateStreak(
 }
 
 /**
- * Checks and updates streak for a user profile (or guest).
- * Persists changes to Supabase and LocalStorage.
+ * Checks and validates streak status on site entry or focus.
+ * If user missed a day (diff > 1), resets streak to 0 in Supabase and LocalStorage.
  */
 export async function checkAndUpdateStreak(
   profile: UserProfile | null,
-  fallbackStreak: number = 1
+  fallbackStreak: number = 0
 ): Promise<{ streak: number; profile: UserProfile | null }> {
-  const todayStr = getLocalDateString();
-
   if (profile) {
     const currentStreak = typeof profile.streak_days === 'number' ? profile.streak_days : fallbackStreak;
     const { newStreak, shouldUpdate } = evaluateStreak(
@@ -113,16 +111,14 @@ export async function checkAndUpdateStreak(
     if (shouldUpdate) {
       const updatedProfile: UserProfile = {
         ...profile,
-        streak_days: newStreak,
-        last_study_date: todayStr
+        streak_days: newStreak
       };
 
       try {
         await supabase
           .from('profiles')
           .update({
-            streak_days: newStreak,
-            last_study_date: todayStr
+            streak_days: newStreak
           })
           .eq('id', profile.id);
       } catch (err) {
@@ -132,7 +128,6 @@ export async function checkAndUpdateStreak(
       saveSession(updatedProfile);
       if (typeof window !== 'undefined') {
         localStorage.setItem(SESSION_KEYS.STREAK, newStreak.toString());
-        localStorage.setItem('lexis_last_study_date', todayStr);
       }
 
       return { streak: newStreak, profile: updatedProfile };
@@ -148,7 +143,7 @@ export async function checkAndUpdateStreak(
       guestLastDate = localStorage.getItem('lexis_last_study_date');
       const savedStreak = localStorage.getItem(SESSION_KEYS.STREAK);
       if (savedStreak) {
-        guestStreak = parseInt(savedStreak, 10) || 1;
+        guestStreak = parseInt(savedStreak, 10) || 0;
       }
     }
 
@@ -156,7 +151,6 @@ export async function checkAndUpdateStreak(
 
     if (shouldUpdate && typeof window !== 'undefined') {
       localStorage.setItem(SESSION_KEYS.STREAK, newStreak.toString());
-      localStorage.setItem('lexis_last_study_date', todayStr);
     }
 
     return { streak: newStreak, profile: null };
@@ -164,29 +158,65 @@ export async function checkAndUpdateStreak(
 }
 
 /**
- * Records learning activity (e.g. completing a unit, learning words).
- * Ensures last_study_date is locked to today and synced with database.
+ * Records learning activity.
+ * CALLED ONLY WHEN AT LEAST 1 WORD HAS SUCCESSFULLY COMPLETED ALL 5 PHASES.
+ * 
+ * Rules:
+ * - If user already completed a 5-phase word today: keeps current streak (doesn't double count).
+ * - If user completed a 5-phase word yesterday: increments streak (+1 day).
+ * - If user was at 0 (new or missed days): starts streak at 1 day.
  */
 export async function recordStudyActivity(
   profile: UserProfile | null,
   currentStreak: number
 ): Promise<{ streak: number; profile: UserProfile | null }> {
   const todayStr = getLocalDateString();
-  const streakToKeep = Math.max(1, currentStreak);
+  const nowIso = new Date().toISOString();
+
+  let prevDate: string | null = null;
+  if (profile?.last_study_date) {
+    prevDate = profile.last_study_date.includes('T')
+      ? getLocalDateString(new Date(profile.last_study_date))
+      : profile.last_study_date;
+  } else if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('lexis_last_study_date');
+    if (saved) {
+      prevDate = saved.includes('T') ? getLocalDateString(new Date(saved)) : saved;
+    }
+  }
+
+  let nextStreak = currentStreak;
+
+  if (!prevDate) {
+    // First time completing a 5-phase word ever
+    nextStreak = 1;
+  } else {
+    const diff = calculateDaysBetween(prevDate, todayStr);
+    if (diff === 0) {
+      // Already completed at least one 5-phase word today: keep streak
+      nextStreak = Math.max(1, currentStreak);
+    } else if (diff === 1) {
+      // Consecutive day! Completed yesterday and now completing today: +1 day
+      nextStreak = currentStreak + 1;
+    } else {
+      // Missed 1 or more days: restarts new streak at 1
+      nextStreak = 1;
+    }
+  }
 
   if (profile) {
     const updatedProfile: UserProfile = {
       ...profile,
-      streak_days: streakToKeep,
-      last_study_date: todayStr
+      streak_days: nextStreak,
+      last_study_date: nowIso
     };
 
     try {
       await supabase
         .from('profiles')
         .update({
-          streak_days: streakToKeep,
-          last_study_date: todayStr
+          streak_days: nextStreak,
+          last_study_date: nowIso
         })
         .eq('id', profile.id);
     } catch (err) {
@@ -195,16 +225,16 @@ export async function recordStudyActivity(
 
     saveSession(updatedProfile);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(SESSION_KEYS.STREAK, streakToKeep.toString());
+      localStorage.setItem(SESSION_KEYS.STREAK, nextStreak.toString());
       localStorage.setItem('lexis_last_study_date', todayStr);
     }
 
-    return { streak: streakToKeep, profile: updatedProfile };
+    return { streak: nextStreak, profile: updatedProfile };
   } else {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(SESSION_KEYS.STREAK, streakToKeep.toString());
+      localStorage.setItem(SESSION_KEYS.STREAK, nextStreak.toString());
       localStorage.setItem('lexis_last_study_date', todayStr);
     }
-    return { streak: streakToKeep, profile: null };
+    return { streak: nextStreak, profile: null };
   }
 }

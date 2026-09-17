@@ -39,10 +39,26 @@ export const preloadWordAudios = (urls: (string | undefined)[]) => {
   });
 };
 
+export const getSpeechRate = (): number => {
+  if (typeof window === 'undefined') return 1.0;
+  const rate = localStorage.getItem('lexis_speech_rate');
+  if (rate) {
+    const parsed = parseFloat(rate);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return 1.0;
+};
+
+export const isAutoSpeakEnabled = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  return localStorage.getItem('lexis_auto_speak') !== 'false';
+};
+
 // Pronounce target word: guaranteed exactly ONCE per call (no duplicates or echoes)
 export const speakWord = (word: string, audioUrl?: string): Promise<void> => {
   stopAudio();
   const thisId = activeSpeakId;
+  const userRate = getSpeechRate();
 
   return new Promise((resolve) => {
     let hasCompleted = false;
@@ -69,7 +85,7 @@ export const speakWord = (word: string, audioUrl?: string): Promise<void> => {
       const cleanWord = word.trim().replace(/[^\w\s-]/g, '');
       const utterance = new SpeechSynthesisUtterance(cleanWord);
       utterance.lang = 'en-US';
-      utterance.rate = 0.9;
+      utterance.rate = Math.max(0.6, Math.min(1.6, 0.9 * userRate));
       utterance.pitch = 1.0;
 
       const voices = window.speechSynthesis.getVoices();
@@ -107,6 +123,7 @@ export const speakWord = (word: string, audioUrl?: string): Promise<void> => {
 
         currentAudioElement = audio;
         audio.currentTime = 0;
+        audio.playbackRate = userRate;
 
         audio.onended = () => {
           if (thisId === activeSpeakId) {
@@ -153,6 +170,8 @@ export interface SpeechController {
 interface IWindow extends Window {
   webkitSpeechRecognition?: any;
   SpeechRecognition?: any;
+  SpeechGrammarList?: any;
+  webkitSpeechGrammarList?: any;
 }
 
 export const isSpeechRecognitionSupported = (): boolean => {
@@ -183,35 +202,40 @@ export const startListening = (
     recognition.lang = 'en-US';
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 5;
+    recognition.maxAlternatives = 1;
+
+    // Optional SpeechGrammarList to optimize recognition for the target word
+    const SpeechGrammarList = win.SpeechGrammarList || win.webkitSpeechGrammarList;
+    if (SpeechGrammarList) {
+      try {
+        const speechRecognitionList = new SpeechGrammarList();
+        const cleanWord = targetWord.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+        if (cleanWord) {
+          speechRecognitionList.addFromString(`#JSGF V1.0; grammar word; public <word> = ${cleanWord} ;`, 1);
+          recognition.grammars = speechRecognitionList;
+        }
+      } catch (_) {}
+    }
 
     let accumulatedTranscript = '';
+    let finalTranscript = '';
     let hasDeliveredResult = false;
-    let anyMatch = false;
 
     recognition.onresult = (event: any) => {
-      let interim = '';
-      let final = '';
-
-      for (let i = 0; i < event.results.length; ++i) {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
         const item = event.results[i];
+        const text = item[0]?.transcript || '';
         if (item.isFinal) {
-          final += item[0].transcript + ' ';
-          for (let j = 0; j < item.length; j++) {
-            const altText = item[j].transcript.toLowerCase().trim().replace(/[^\w\s]/g, '');
-            const targetClean = targetWord.toLowerCase().trim().replace(/[^\w\s]/g, '');
-            if (altText === targetClean || altText.split(/\s+/).includes(targetClean)) {
-              anyMatch = true;
-            }
-          }
+          finalTranscript += text + ' ';
         } else {
-          interim += item[0].transcript;
+          interimTranscript += text;
         }
       }
 
-      const current = (final || interim).trim();
-      if (current) {
-        accumulatedTranscript = current;
+      const combined = (finalTranscript + interimTranscript).trim();
+      if (combined) {
+        accumulatedTranscript = combined;
         onInterim(accumulatedTranscript);
       }
     };
@@ -232,16 +256,25 @@ export const startListening = (
       hasDeliveredResult = true;
 
       const spoken = accumulatedTranscript.trim();
-      const targetClean = targetWord.toLowerCase().trim().replace(/[^\w\s]/g, '');
-      const spokenClean = spoken.toLowerCase().trim().replace(/[^\w\s]/g, '');
+      
+      // Clean target word
+      const targetClean = targetWord.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+      
+      // Tokenize what was actually spoken
+      const spokenClean = spoken.toLowerCase().trim().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+      const spokenTokens = spokenClean.split(' ').filter(Boolean);
 
-      const isMatch = Boolean(
-        anyMatch ||
-        (spokenClean && (
-          spokenClean === targetClean ||
-          spokenClean.split(/\s+/).includes(targetClean)
-        ))
-      );
+      // Strict Exact Match:
+      // The spoken speech must explicitly contain the exact target word token.
+      // Substring hallucinations (e.g. "cal" matching "local") are strictly rejected!
+      let isMatch = false;
+      if (targetClean && spokenTokens.length > 0) {
+        if (targetClean.includes(' ')) {
+          isMatch = spokenClean === targetClean || spokenClean.includes(targetClean);
+        } else {
+          isMatch = spokenTokens.includes(targetClean);
+        }
+      }
 
       onResult({
         transcript: spoken,

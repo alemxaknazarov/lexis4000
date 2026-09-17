@@ -14,34 +14,66 @@ import { Phase4Voice } from './components/learning/Phase4Voice';
 import { Phase5Visual } from './components/learning/Phase5Visual';
 import { Phase6Summary } from './components/learning/Phase6Summary';
 import { AuthModal } from './components/AuthModal';
-import { LeaderboardModal } from './components/LeaderboardModal';
-import { MistakesModal } from './components/MistakesModal';
+import { LeaderboardPage } from './components/LeaderboardPage';
+import { MistakesPage } from './components/MistakesPage';
 import { LoginPage } from './components/LoginPage';
 import { ProfilePage } from './components/ProfilePage';
+import { SettingsPage } from './components/SettingsPage';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { resolveRoute, routes, type AppView } from './router/routes';
 import { stopAudio } from './utils/speech';
 import { loadValidSession, saveSession, touchSession, clearSession } from './utils/sessionManager';
 import { checkAndUpdateStreak, recordStudyActivity } from './utils/streakManager';
-import { getMistakeCount } from './utils/mistakeManager';
+import { getMistakeCount, removeMistake } from './utils/mistakeManager';
+
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 export function App() {
-  // Theme State (Default: light Scandinavian canvas with dark mode toggle)
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    return localStorage.getItem('lexis_theme') === 'dark';
+  // Theme State: defaults to 'system' (matches device appearance automatically on first visit)
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem('lexis_theme_mode');
+    if (saved === 'system' || saved === 'light' || saved === 'dark') {
+      return saved;
+    }
+    return 'system';
   });
+
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'light';
+  });
+
+  // Dynamic listener for OS/system theme changes
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = (e: MediaQueryListEvent) => {
+      setSystemTheme(e.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  const isDark = themeMode === 'system' ? systemTheme === 'dark' : themeMode === 'dark';
 
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('lexis_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('lexis_theme', 'light');
     }
   }, [isDark]);
 
+  const handleSetThemeMode = (mode: ThemeMode) => {
+    setThemeModeState(mode);
+    localStorage.setItem('lexis_theme_mode', mode);
+  };
+
   const toggleTheme = () => {
-    setIsDark((prev) => !prev);
+    const next = isDark ? 'light' : 'dark';
+    handleSetThemeMode(next);
   };
 
   // User Profile State (Initialized early for Auth Guard Middleware with 24-hour expiration)
@@ -79,9 +111,18 @@ export function App() {
 
   const [learningPhase, setLearningPhase] = useState<number>(1);
 
+  const scrollToTop = () => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  };
+
   // Unified Navigation with Middleware
   const navigate = (path: string, replace = false) => {
     stopAudio();
+    scrollToTop();
     const res = resolveRoute(path, userProfile);
     const targetPath = res.redirectUrl || path;
 
@@ -101,6 +142,7 @@ export function App() {
   // Sync with browser URL & PopState (Back / Forward)
   useEffect(() => {
     const handlePopState = () => {
+      scrollToTop();
       const res = resolveRoute(window.location.pathname, userProfile);
       if (res.redirectUrl) {
         window.history.replaceState(null, '', res.redirectUrl);
@@ -146,7 +188,7 @@ export function App() {
   });
   const [sessionEarnedXp, setSessionEarnedXp] = useState<number>(0);
   const [streak, setStreak] = useState<number>(() => {
-    return parseInt(localStorage.getItem('lexis_streak') || '1', 10);
+    return parseInt(localStorage.getItem('lexis_streak') || '0', 10);
   });
   const [unitProgressList, setUnitProgressList] = useState<UnitProgress[]>(() => {
     const saved = localStorage.getItem('lexis_progress');
@@ -171,9 +213,10 @@ export function App() {
   });
   // In-session points per word (word.id -> passed phases in current session: 0..5)
   const [sessionWordPoints, setSessionWordPoints] = useState<Record<string, number>>({});
+  // In-session failed word IDs (words that failed with 2 mistakes in any phase)
+  const [sessionFailedWordIds, setSessionFailedWordIds] = useState<Set<string>>(new Set());
+  const [isMistakesSession, setIsMistakesSession] = useState<boolean>(false);
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
-  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState<boolean>(false);
-  const [isMistakesOpen, setIsMistakesOpen] = useState<boolean>(false);
   const [mistakeCount, setMistakeCount] = useState<number>(() => getMistakeCount());
 
   useEffect(() => {
@@ -182,9 +225,10 @@ export function App() {
     return () => window.removeEventListener('lexis_mistakes_updated', handleUpdate);
   }, []);
 
-  // Stop audio on view changes
+  // Stop audio and scroll to top on any view, phase, unit, or book change
   useEffect(() => {
     stopAudio();
+    scrollToTop();
   }, [currentView, learningPhase, selectedUnit, selectedBook]);
 
   // User activity tracker: resets 24-hour session window on active interaction,
@@ -343,7 +387,8 @@ export function App() {
     accuracy: number,
     isCompleted: boolean,
     learnedCount: number,
-    earnedXpForSession: number
+    earnedXpForSession: number,
+    hasCompletedFullWord: boolean = false
   ) => {
     const updated = [...unitProgressList.filter(p => !(p.book_number === bookNum && p.unit_number === unitNum))];
     updated.push({
@@ -361,12 +406,16 @@ export function App() {
     setXp(newXp);
     localStorage.setItem('lexis_xp', newXp.toString());
 
-    // Record study activity to lock streak for today
-    const studyRes = await recordStudyActivity(userProfile, streak);
-    if (studyRes.profile) {
-      setUserProfile(studyRes.profile);
+    // Record study activity to lock streak for today ONLY if at least 1 word completed all 5 phases
+    let activeStreak = streak;
+    if (hasCompletedFullWord) {
+      const studyRes = await recordStudyActivity(userProfile, streak);
+      if (studyRes.profile) {
+        setUserProfile(studyRes.profile);
+      }
+      activeStreak = studyRes.streak;
+      setStreak(studyRes.streak);
     }
-    setStreak(studyRes.streak);
 
     if (userProfile) {
       try {
@@ -378,11 +427,16 @@ export function App() {
           is_completed: isCompleted
         });
 
-        await supabase.from('profiles').update({
-          total_xp: newXp,
-          streak_days: studyRes.streak,
-          last_study_date: studyRes.profile?.last_study_date
-        }).eq('id', userProfile.id);
+        const updatePayload: Record<string, any> = {
+          total_xp: newXp
+        };
+        if (hasCompletedFullWord) {
+          const nowIso = new Date().toISOString();
+          updatePayload.streak_days = activeStreak;
+          updatePayload.last_study_date = nowIso;
+        }
+
+        await supabase.from('profiles').update(updatePayload).eq('id', userProfile.id);
       } catch (err) {
         console.error('Failed to sync to Supabase:', err);
       }
@@ -428,8 +482,10 @@ export function App() {
       return;
     }
 
+    setIsMistakesSession(false);
     setSelectedWords(wordsToLearn);
     setSessionEarnedXp(0);
+    setSessionFailedWordIds(new Set());
     const initialPoints: Record<string, number> = {};
     wordsToLearn.forEach((w) => {
       initialPoints[w.id] = 0;
@@ -439,14 +495,55 @@ export function App() {
     navigate(routes.learn(selectedBook, selectedUnit));
   };
 
+  const handleStartMistakesLearning = (wordsToLearn: Word[]) => {
+    if (!userProfile) {
+      localStorage.setItem('lexis_auth_redirect_url', routes.mistakes());
+      localStorage.setItem(
+        'lexis_pending_selected_words',
+        JSON.stringify(wordsToLearn.map((w) => w.id))
+      );
+      setSelectedWords(wordsToLearn);
+      navigate(routes.login());
+      return;
+    }
+
+    setIsMistakesSession(true);
+    setSelectedWords(wordsToLearn);
+    setSessionEarnedXp(0);
+    setSessionFailedWordIds(new Set());
+    const initialPoints: Record<string, number> = {};
+    wordsToLearn.forEach((w) => {
+      initialPoints[w.id] = 0;
+    });
+    setSessionWordPoints(initialPoints);
+    setLearningPhase(1);
+    scrollToTop();
+    const bNum = wordsToLearn[0]?.book_number || selectedBook;
+    const uNum = wordsToLearn[0]?.unit_number || selectedUnit;
+    navigate(routes.learn(bNum, uNum));
+  };
+
   const handleBack = () => {
     stopAudio();
+    scrollToTop();
     if (currentView === 'learning') {
-      navigate(routes.unit(selectedBook, selectedUnit));
+      if (isMistakesSession) {
+        navigate(routes.mistakes());
+      } else {
+        navigate(routes.unit(selectedBook, selectedUnit));
+      }
     } else if (currentView === 'words') {
       navigate(routes.book(selectedBook));
     } else if (currentView === 'units') {
       navigate(routes.catalog());
+    } else if (currentView === 'mistakes') {
+      navigate(routes.catalog());
+    } else if (currentView === 'leaderboard') {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        navigate(routes.catalog());
+      }
     } else {
       navigate(routes.catalog());
     }
@@ -455,6 +552,8 @@ export function App() {
   const navigateToLogin = () => navigate(routes.login());
   const navigateToProfile = () => navigate(routes.profile());
   const navigateToHome = () => navigate(routes.catalog());
+  const navigateToLeaderboard = () => navigate(routes.leaderboard());
+  const navigateToSettings = () => navigate(routes.settings());
 
   const handleSignOut = async () => {
     clearSession();
@@ -505,18 +604,22 @@ export function App() {
   // Dedicated Full-page Login View (42.uz style)
   if (currentView === 'login') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
         <LoginPage
           onSuccess={handleAuthSuccess}
           onGoHome={navigateToHome}
-          onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
+          onOpenLeaderboard={navigateToLeaderboard}
         />
-        <LeaderboardModal
-          isOpen={isLeaderboardOpen}
-          onClose={() => setIsLeaderboardOpen(false)}
-          currentUser={userProfile}
+        <MobileBottomNav
+          currentView={currentView}
+          onGoHome={navigateToHome}
+          onOpenSettings={navigateToSettings}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          userProfile={userProfile}
+          onOpenProfile={navigateToProfile}
+          onOpenAuth={navigateToLogin}
         />
       </div>
     );
@@ -529,31 +632,123 @@ export function App() {
       return null;
     }
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
         <ProfilePage
           userProfile={userProfile}
           unitProgressList={unitProgressList}
           books={books}
           onGoHome={navigateToHome}
-          onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+          onOpenLeaderboard={navigateToLeaderboard}
           onSignOut={() => {
             handleSignOut();
             navigateToHome();
           }}
+          onUpdateProfile={(updated) => {
+            setUserProfile(updated);
+            saveSession(updated);
+          }}
+          themeMode={themeMode}
+          onSetThemeMode={handleSetThemeMode}
           isDark={isDark}
-          onToggleTheme={toggleTheme}
+          onOpenSettings={navigateToSettings}
         />
-        <LeaderboardModal
-          isOpen={isLeaderboardOpen}
-          onClose={() => setIsLeaderboardOpen(false)}
+        <MobileBottomNav
+          currentView={currentView}
+          onGoHome={navigateToHome}
+          onOpenSettings={navigateToSettings}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          userProfile={userProfile}
+          onOpenProfile={navigateToProfile}
+          onOpenAuth={navigateToLogin}
+        />
+      </div>
+    );
+  }
+
+  // Dedicated Full-page Settings View
+  if (currentView === 'settings') {
+    return (
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+        <SettingsPage
+          themeMode={themeMode}
+          onSetThemeMode={handleSetThemeMode}
+          isDark={isDark}
+          userProfile={userProfile}
+          onGoHome={navigateToHome}
+          onGoBack={handleBack}
+        />
+        <MobileBottomNav
+          currentView={currentView}
+          onGoHome={navigateToHome}
+          onOpenSettings={navigateToSettings}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          userProfile={userProfile}
+          onOpenProfile={navigateToProfile}
+          onOpenAuth={navigateToLogin}
+        />
+      </div>
+    );
+  }
+
+  // Dedicated Full-page Leaderboard View
+  if (currentView === 'leaderboard') {
+    return (
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+        <LeaderboardPage
           currentUser={userProfile}
+          onGoHome={navigateToHome}
+          onGoBack={handleBack}
+          onOpenAuth={navigateToLogin}
+        />
+        <MobileBottomNav
+          currentView={currentView}
+          onGoHome={navigateToHome}
+          onOpenSettings={navigateToSettings}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          userProfile={userProfile}
+          onOpenProfile={navigateToProfile}
+          onOpenAuth={navigateToLogin}
+        />
+      </div>
+    );
+  }
+
+  // Dedicated Full-page Mistakes View
+  if (currentView === 'mistakes') {
+    return (
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+        <MistakesPage
+          onStartLearning={handleStartMistakesLearning}
+          onGoHome={navigateToHome}
+          onGoBack={handleBack}
+          userProfile={userProfile}
+          onOpenAuth={navigateToLogin}
+          onOpenProfile={navigateToProfile}
+          onOpenLeaderboard={navigateToLeaderboard}
+        />
+        <MobileBottomNav
+          currentView={currentView}
+          onGoHome={navigateToHome}
+          onOpenSettings={navigateToSettings}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          userProfile={userProfile}
+          onOpenProfile={navigateToProfile}
+          onOpenAuth={navigateToLogin}
         />
       </div>
     );
   }
 
   return (
-    <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col overflow-x-hidden transition-colors`}>
+    <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col overflow-x-clip transition-colors`}>
       {/* Top Navbar */}
       <Navbar
         currentView={currentView}
@@ -562,9 +757,9 @@ export function App() {
         userProfile={userProfile}
         onOpenAuth={navigateToLogin}
         onOpenProfile={navigateToProfile}
-        onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+        onOpenLeaderboard={navigateToLeaderboard}
         mistakeCount={mistakeCount}
-        onOpenMistakes={() => setIsMistakesOpen(true)}
+        onOpenMistakes={() => navigate(routes.mistakes())}
         xp={xp}
         streak={streak}
         isDark={isDark}
@@ -572,18 +767,20 @@ export function App() {
       />
 
       {/* Main Content Views */}
-      <main className="flex-1 pt-14 sm:pt-16 pb-12">
-        {/* Back Button (Positioned comfortably below fixed Navbar) */}
+      <main className="flex-1 pt-14 sm:pt-16 pb-24 sm:pb-12">
+        {/* Sticky Back Button Bar (Stays pinned in place below Navbar when page scrolls) */}
         {currentView !== 'catalog' && (
-          <div className="max-w-6xl mx-auto px-3.5 sm:px-6 pt-3.5 sm:pt-5 pb-0">
-            <button
-              onClick={handleBack}
-              aria-label="Orqaga qaytish"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer group active:scale-95"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
-              <span>Orqaga</span>
-            </button>
+          <div className="sticky top-14 sm:top-16 z-30 bg-slate-50 dark:bg-slate-950 py-2.5 transition-colors">
+            <div className="max-w-6xl mx-auto px-3.5 sm:px-6 flex items-center justify-between">
+              <button
+                onClick={handleBack}
+                aria-label="Orqaga qaytish"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer group active:scale-95"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                <span>Orqaga</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -623,11 +820,10 @@ export function App() {
               <Phase1Flashcard
                 words={selectedWords}
                 onFinishPhase={() => {
-                  setSessionEarnedXp(selectedWords.length);
                   setSessionWordPoints((prev) => {
                     const next = { ...prev };
                     selectedWords.forEach((w) => {
-                      next[w.id] = (next[w.id] || 0) + 1;
+                      next[w.id] = 1;
                     });
                     return next;
                   });
@@ -639,8 +835,14 @@ export function App() {
             {learningPhase === 2 && (
               <Phase2Spelling
                 words={selectedWords}
-                onCompletePhase={(earned, passedIds) => {
-                  setSessionEarnedXp((prev) => prev + earned);
+                onCompletePhase={(_earned, passedIds, failedIds) => {
+                  if (failedIds && failedIds.length > 0) {
+                    setSessionFailedWordIds((prev) => {
+                      const next = new Set(prev);
+                      failedIds.forEach((id) => next.add(id));
+                      return next;
+                    });
+                  }
                   const passedSet = new Set(passedIds || []);
                   setSessionWordPoints((prev) => {
                     const next = { ...prev };
@@ -660,8 +862,14 @@ export function App() {
               <Phase3Quiz
                 words={selectedWords}
                 allWords={allWords}
-                onCompletePhase={(earned, passedIds) => {
-                  setSessionEarnedXp((prev) => prev + earned);
+                onCompletePhase={(_earned, passedIds, failedIds) => {
+                  if (failedIds && failedIds.length > 0) {
+                    setSessionFailedWordIds((prev) => {
+                      const next = new Set(prev);
+                      failedIds.forEach((id) => next.add(id));
+                      return next;
+                    });
+                  }
                   const passedSet = new Set(passedIds || []);
                   setSessionWordPoints((prev) => {
                     const next = { ...prev };
@@ -680,8 +888,14 @@ export function App() {
             {learningPhase === 4 && (
               <Phase4Voice
                 words={selectedWords}
-                onCompletePhase={(earned, passedIds) => {
-                  setSessionEarnedXp((prev) => prev + earned);
+                onCompletePhase={(_earned, passedIds, failedIds) => {
+                  if (failedIds && failedIds.length > 0) {
+                    setSessionFailedWordIds((prev) => {
+                      const next = new Set(prev);
+                      failedIds.forEach((id) => next.add(id));
+                      return next;
+                    });
+                  }
                   const passedSet = new Set(passedIds || []);
                   setSessionWordPoints((prev) => {
                     const next = { ...prev };
@@ -701,9 +915,12 @@ export function App() {
               <Phase5Visual
                 words={selectedWords}
                 allWords={allWords}
-                onCompletePhase={(earned, passedIds) => {
-                  const finalEarnedXp = sessionEarnedXp + earned;
-                  setSessionEarnedXp(finalEarnedXp);
+                onCompletePhase={(_earned, passedIds, failedIds) => {
+                  const finalFailed = new Set(sessionFailedWordIds);
+                  if (failedIds && failedIds.length > 0) {
+                    failedIds.forEach((id) => finalFailed.add(id));
+                    setSessionFailedWordIds(finalFailed);
+                  }
 
                   const passedSet = new Set(passedIds || []);
                   const finalWordPoints: Record<string, number> = { ...sessionWordPoints };
@@ -727,12 +944,21 @@ export function App() {
                     console.error('Failed to save wordPhaseScores:', e);
                   }
 
-                  // Update learnedWordIds: marked learned when word achieves >= 4 passed phases
+                  // 1. Perfectly completed words across all 5 phases (without 2-mistake failure)
+                  const perfectWords = selectedWords.filter((w) => !finalFailed.has(w.id));
+                  // Rule: exactly 1 XP per fully and perfectly completed word
+                  const earnedXp = perfectWords.length;
+                  setSessionEarnedXp(earnedXp);
+
+                  // 2. Remove perfected words from Mistakes section
+                  perfectWords.forEach((w) => {
+                    removeMistake(w.id);
+                  });
+
+                  // 3. Update learnedWordIds: marked learned only when fully and perfectly completed
                   const nextLearnedWordIds = new Set(learnedWordIds);
-                  selectedWords.forEach((w) => {
-                    if ((updatedWordScores[w.id] || 0) >= 4) {
-                      nextLearnedWordIds.add(w.id);
-                    }
+                  perfectWords.forEach((w) => {
+                    nextLearnedWordIds.add(w.id);
                   });
                   setLearnedWordIds(nextLearnedWordIds);
                   try {
@@ -744,18 +970,25 @@ export function App() {
                     console.error('Failed to save learnedWordIds:', e);
                   }
 
-                  // Unit percentage: 20 words * 5 phases = 100 phases. Each phase is exactly 1%
+                  // 4. Calculate Unit Progress: 5% per word (1 word = 5%, 20 words = 100%)
                   const unitWords = currentUnitWords.length > 0 ? currentUnitWords : selectedWords;
-                  const totalPossiblePoints = (unitWords.length > 0 ? unitWords.length : 20) * 5;
-                  const currentUnitPoints = unitWords.reduce(
-                    (sum, w) => sum + (updatedWordScores[w.id] || 0),
-                    0
-                  );
-                  const accuracy = Math.min(100, Math.round((currentUnitPoints / totalPossiblePoints) * 100));
+                  const totalWords = unitWords.length > 0 ? unitWords.length : 20;
+                  const unitLearnedCount = unitWords.filter((w) => nextLearnedWordIds.has(w.id)).length;
+                  const accuracy = Math.min(100, Math.round((unitLearnedCount / totalWords) * 100));
                   const isCompleted = accuracy >= 100;
-                  const unitLearnedCount = unitWords.filter((w) => (updatedWordScores[w.id] || 0) >= 4).length;
 
-                  saveUnitProgress(selectedBook, selectedUnit, accuracy, isCompleted, unitLearnedCount, finalEarnedXp);
+                  // 5. Daily Streak: at least 1 word completed all 5 phases
+                  const hasCompletedFullWord = perfectWords.length > 0;
+
+                  saveUnitProgress(
+                    selectedBook,
+                    selectedUnit,
+                    accuracy,
+                    isCompleted,
+                    unitLearnedCount,
+                    earnedXp,
+                    hasCompletedFullWord
+                  );
                   setLearningPhase(6);
                 }}
               />
@@ -763,16 +996,12 @@ export function App() {
 
             {learningPhase === 6 && (() => {
               const unitWords = currentUnitWords.length > 0 ? currentUnitWords : selectedWords;
-              const totalPossiblePoints = (unitWords.length > 0 ? unitWords.length : 20) * 5;
-              const currentUnitPoints = unitWords.reduce(
-                (sum, w) => sum + (wordPhaseScores[w.id] || 0),
-                0
-              );
-              const unitAccuracy = Math.min(100, Math.round((currentUnitPoints / totalPossiblePoints) * 100));
+              const totalWords = unitWords.length > 0 ? unitWords.length : 20;
+              const unitLearnedCount = unitWords.filter((w) => learnedWordIds.has(w.id)).length;
+              const unitAccuracy = Math.min(100, Math.round((unitLearnedCount / totalWords) * 100));
               const isUnitCompleted = unitAccuracy >= 100;
-              const unitLearnedCount = unitWords.filter((w) => (wordPhaseScores[w.id] || 0) >= 4).length;
 
-              const maxSessionXp = selectedWords.length * 5;
+              const maxSessionXp = selectedWords.length;
               const sessionAccuracy = maxSessionXp > 0 ? Math.round((sessionEarnedXp / maxSessionXp) * 100) : 100;
 
               return (
@@ -786,17 +1015,24 @@ export function App() {
                   unitLearnedCount={unitLearnedCount}
                   isUnitCompleted={isUnitCompleted}
                   onNextUnit={() => {
-                    if (selectedUnit < 30) {
+                    if (isMistakesSession) {
+                      navigate(routes.mistakes());
+                    } else if (selectedUnit < 30) {
                       navigate(routes.unit(selectedBook, selectedUnit + 1));
                     } else {
                       navigate(routes.catalog());
                     }
                   }}
                   onContinueUnit={() => {
-                    navigate(routes.unit(selectedBook, selectedUnit));
+                    if (isMistakesSession) {
+                      navigate(routes.mistakes());
+                    } else {
+                      navigate(routes.unit(selectedBook, selectedUnit));
+                    }
                   }}
                   onRestart={() => {
                     setSessionEarnedXp(0);
+                    setSessionFailedWordIds(new Set());
                     const initialPoints: Record<string, number> = {};
                     selectedWords.forEach((w) => {
                       initialPoints[w.id] = 0;
@@ -821,19 +1057,20 @@ export function App() {
         </footer>
       )}
 
-      {/* Leaderboard Modal */}
-      <LeaderboardModal
-        isOpen={isLeaderboardOpen}
-        onClose={() => setIsLeaderboardOpen(false)}
-        currentUser={userProfile}
-      />
-
-      {/* Mistakes Practice Modal */}
-      <MistakesModal
-        isOpen={isMistakesOpen}
-        onClose={() => setIsMistakesOpen(false)}
-        onStartPractice={(words) => handleStartLearning(words)}
-      />
+      {/* Mobile Bottom Navigation Bar (Apple frosted glass effect, only when not in active learning) */}
+      {currentView !== 'learning' && (
+        <MobileBottomNav
+          currentView={currentView}
+          onGoHome={navigateToHome}
+          onOpenSettings={navigateToSettings}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          userProfile={userProfile}
+          onOpenProfile={navigateToProfile}
+          onOpenAuth={navigateToLogin}
+        />
+      )}
 
       {/* Telegram Auth Modal */}
       <AuthModal

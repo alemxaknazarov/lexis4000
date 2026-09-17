@@ -4,10 +4,11 @@ import type { Word } from '../../lib/supabase';
 import { speakWord, startListening, isSpeechRecognitionSupported, stopAudio } from '../../utils/speech';
 import type { SpeechController } from '../../utils/speech';
 import { sounds } from '../../utils/soundEffects';
+import { recordMistake } from '../../utils/mistakeManager';
 
 interface Phase4VoiceProps {
   words: Word[];
-  onCompletePhase: (earnedXp: number, passedWordIds?: string[]) => void;
+  onCompletePhase: (earnedXp: number, passedWordIds?: string[], failedWordIds?: string[]) => void;
 }
 
 export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
@@ -17,9 +18,12 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
   const [queue, setQueue] = useState<Word[]>([...words]);
   const [isListening, setIsListening] = useState(false);
   const [spokenText, setSpokenText] = useState<string | null>(null);
-  const [evaluation, setEvaluation] = useState<'idle' | 'correct' | 'wrong'>('idle');
+  const [evaluation, setEvaluation] = useState<'idle' | 'correct' | 'wrong' | 'retry'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [passedWordIds, setPassedWordIds] = useState<Set<string>>(new Set());
+  const [wordMistakes, setWordMistakes] = useState<Record<string, number>>({});
+  const [failedWordIds, setFailedWordIds] = useState<Set<string>>(new Set());
+  const MAX_VOICE_ATTEMPTS = 5;
 
   const recognitionRef = useRef<SpeechController | null>(null);
   const isTouchActiveRef = useRef<boolean>(false);
@@ -68,8 +72,17 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
           sounds.playCorrect();
           setPassedWordIds((prev) => new Set(prev).add(currentWord.id));
         } else {
-          setEvaluation('wrong');
+          const attempts = (wordMistakes[currentWord.id] || 0) + 1;
+          setWordMistakes((prev) => ({ ...prev, [currentWord.id]: attempts }));
           sounds.playWrong();
+
+          if (attempts < MAX_VOICE_ATTEMPTS) {
+            setEvaluation('retry');
+          } else {
+            setEvaluation('wrong');
+            recordMistake(currentWord);
+            setFailedWordIds((prev) => new Set(prev).add(currentWord.id));
+          }
         }
       },
       (err) => {
@@ -135,7 +148,7 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
     sounds.playClick();
     const nextQueue = queue.slice(1);
     if (nextQueue.length === 0) {
-      onCompletePhase(passedWordIds.size, Array.from(passedWordIds));
+      onCompletePhase(passedWordIds.size, Array.from(passedWordIds), Array.from(failedWordIds));
     } else {
       setQueue(nextQueue);
       setEvaluation('idle');
@@ -153,7 +166,17 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
   const handleSkip = () => {
     stopAudio();
     sounds.playClick();
-    handleNext();
+    recordMistake(currentWord);
+    const updatedFailed = new Set(failedWordIds).add(currentWord.id);
+    setFailedWordIds(updatedFailed);
+    const nextQueue = queue.slice(1);
+    if (nextQueue.length === 0) {
+      onCompletePhase(passedWordIds.size, Array.from(passedWordIds), Array.from(updatedFailed));
+    } else {
+      setQueue(nextQueue);
+      setEvaluation('idle');
+      setSpokenText(null);
+    }
   };
 
   if (!currentWord) return null;
@@ -257,11 +280,13 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
                 ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/80'
                 : evaluation === 'wrong'
                 ? 'bg-red-50/70 dark:bg-red-950/40 border-red-300 dark:border-red-800/80'
+                : evaluation === 'retry'
+                ? 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800/80'
                 : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800'
             }`}
           >
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">
-              {isListening ? 'Eshitilmoqda:' : 'Siz aytdingiz:'}
+              {isListening ? 'Eshitilmoqda (gapiring)...' : 'Eshitilgan so‘z:'}
             </span>
             <span
               className={`text-base sm:text-lg font-bold font-mono ${
@@ -269,10 +294,12 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
                   ? 'text-emerald-700 dark:text-emerald-400'
                   : evaluation === 'wrong'
                   ? 'text-red-700 dark:text-red-400'
+                  : evaluation === 'retry'
+                  ? 'text-amber-700 dark:text-amber-400'
                   : 'text-slate-900 dark:text-white'
               }`}
             >
-              {spokenText ? `"${spokenText}"` : '(Ovoz kutilmoqda...)'}
+              {spokenText ? `“${spokenText}”` : '(Ovoz kutilmoqda...)'}
             </span>
           </div>
         )}
@@ -295,18 +322,20 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
           </div>
         )}
 
-        {/* Feedback: Wrong */}
-        {evaluation === 'wrong' && (
-          <div className="w-full p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 flex flex-col sm:flex-row items-center justify-between gap-2.5 animate-shake">
-            <div className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-400 font-medium">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Talaffuz mos kelmadi</span>
+        {/* Feedback: Retry (Allows multiple chances) */}
+        {evaluation === 'retry' && (
+          <div className="w-full p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 flex flex-col sm:flex-row items-center justify-between gap-2.5 animate-fadeIn">
+            <div className="flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300 font-medium">
+              <RotateCcw className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>
+                Talaffuz mos kelmadi ({wordMistakes[currentWord.id] || 1}/{MAX_VOICE_ATTEMPTS}-urinish). Qayta ayting!
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleRetry}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Qayta aytish</span>
@@ -318,6 +347,26 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
               >
                 <FastForward className="w-3.5 h-3.5" />
                 <span>O‘tkazish</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback: Wrong (After 5 attempts) */}
+        {evaluation === 'wrong' && (
+          <div className="w-full p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 flex flex-col sm:flex-row items-center justify-between gap-2.5 animate-shake">
+            <div className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-400 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{MAX_VOICE_ATTEMPTS} marta urinildi. So‘z xatolar ro‘yxatiga qo‘shildi.</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleNext}
+                className="flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+              >
+                <span>Keyingisi</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

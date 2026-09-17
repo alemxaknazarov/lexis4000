@@ -52,9 +52,11 @@ export default async function handler(req: any, res: any) {
 
       const messageText =
         `🔥 Assalomu alaykum, <b>${firstName}</b>!\n\n` +
-        `Bugungi <b>${currentStreak} kunlik</b> o‘rganish seriyangiz (streak) uzilib qolmasin!\n\n` +
-        `Alanga o‘chmasligi uchun bugun atigi 5-10 daqiqa ajratib, 1 ta unitni yakunlang:\n\n` +
-        `🌐 <a href="https://lexis4000.uz">LEXIS 4000 platformasiga kirish</a>`;
+        `Bugungi <b>${currentStreak} kunlik</b> seriyangiz (streak) xavf ostida! Kunlik rejangiz hali yakunlanmadi.\n\n` +
+        `⚡️ Eslatma: LEXIS 4000 da <b>1 ta so‘z = 1 XP</b>.\n` +
+        `Atigi 1 ta unitni (20 ta so‘z = 20 XP) yakunlab, o‘rganish alangangizni so‘ndirmang:\n\n` +
+        `👉 <a href="https://lexis4000.uz">LEXIS 4000 ga kirish</a>\n` +
+        `Yoki pastdagi tugmani bosib bir martalik kirish kodini oling:`;
 
       try {
         const sendRes = await fetch(`${api}/sendMessage`, {

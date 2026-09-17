@@ -69,6 +69,11 @@ export async function verifyTelegramOtp(code: string): Promise<UserProfile> {
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok && data.profile) {
+          if (data.goal) {
+            if (data.goal.track) localStorage.setItem('lexis_learning_track', data.goal.track);
+            if (data.goal.target) localStorage.setItem('lexis_target_level', data.goal.target);
+            if (data.goal.daily) localStorage.setItem('lexis_daily_goal', data.goal.daily);
+          }
           return data.profile as UserProfile;
         }
       } else {
@@ -148,6 +153,17 @@ export async function verifyTelegramOtp(code: string): Promise<UserProfile> {
       throw new Error('Profil yaratishda xatolik yuz berdi.');
     }
     finalProfile = newUser;
+  }
+
+  // Extract goal in fallback
+  if (codeRecord.last_name && codeRecord.last_name.includes('|goal:')) {
+    const goalPart = codeRecord.last_name.split('|goal:')[1];
+    if (goalPart) {
+      const [track, target, daily] = goalPart.split('_');
+      if (track) localStorage.setItem('lexis_learning_track', track);
+      if (target) localStorage.setItem('lexis_target_level', target);
+      if (daily) localStorage.setItem('lexis_daily_goal', daily);
+    }
   }
 
   return finalProfile;

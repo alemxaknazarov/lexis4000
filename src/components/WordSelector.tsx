@@ -158,7 +158,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
       </div>
 
       {/* Words List Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pb-40 sm:pb-6">
         {words.map((word) => {
           const isSelected = selectedWordIds.has(word.id);
           const isMastered = learnedWordIds?.has(word.id);
@@ -247,8 +247,8 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         })}
       </div>
 
-      {/* Mobile Fixed Bottom Action Bar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800/90 px-3.5 py-2.5 shadow-2xl">
+      {/* Mobile Fixed Bottom Action Bar (Floats cleanly right above MobileBottomNav) */}
+      <div className="sm:hidden fixed bottom-[76px] left-3 right-3 z-40 max-w-md mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-2.5 shadow-xl transition-all">
         <div className="max-w-md mx-auto flex items-center justify-between gap-2.5">
           {/* Select All / Deselect button */}
           <button

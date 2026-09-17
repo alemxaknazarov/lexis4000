@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
+import { Volume2, Sparkles, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import type { Word } from '../../lib/supabase';
 import { speakWord, stopAudio } from '../../utils/speech';
 import { sounds } from '../../utils/soundEffects';
-import { recordMistake, removeMistake } from '../../utils/mistakeManager';
+import { recordMistake } from '../../utils/mistakeManager';
 
 interface Phase5VisualProps {
   words: Word[];
   allWords: Word[];
-  onCompletePhase: (earnedXp: number, passedWordIds?: string[]) => void;
+  onCompletePhase: (earnedXp: number, passedWordIds?: string[], failedWordIds?: string[]) => void;
 }
 
 export const Phase5Visual: React.FC<Phase5VisualProps> = ({
@@ -16,22 +16,28 @@ export const Phase5Visual: React.FC<Phase5VisualProps> = ({
   allWords,
   onCompletePhase
 }) => {
-  const [round, setRound] = useState<1 | 2>(1);
-  const [activeList, setActiveList] = useState<Word[]>([...words]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [missedWords, setMissedWords] = useState<Word[]>([]);
   const [imageOptions, setImageOptions] = useState<Word[]>([]);
+  const [isImagesLoading, setIsImagesLoading] = useState(true);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [isAnswering, setIsAnswering] = useState(false);
+  const [wrongImageIds, setWrongImageIds] = useState<Set<string>>(new Set());
+  const [failedWordIds, setFailedWordIds] = useState<Set<string>>(new Set());
+  const [secondChanceActive, setSecondChanceActive] = useState(false);
+  const [showFailureAlert, setShowFailureAlert] = useState(false);
 
-  const currentWord = activeList[currentIndex];
+  const currentWord = words[currentIndex];
 
   useEffect(() => {
     stopAudio();
     if (!currentWord) return;
 
+    setIsImagesLoading(true);
     setSelectedWordId(null);
     setIsAnswering(false);
+    setWrongImageIds(new Set());
+    setSecondChanceActive(false);
+    setShowFailureAlert(false);
 
     const pool = allWords.filter((w) => w.id !== currentWord.id);
     const shuffledPool = [...pool].sort(() => 0.5 - Math.random());
@@ -40,63 +46,92 @@ export const Phase5Visual: React.FC<Phase5VisualProps> = ({
     const fullOptions = [currentWord, ...distractors].sort(() => 0.5 - Math.random());
     setImageOptions(fullOptions);
 
-    return () => {
-      stopAudio();
-    };
-  }, [currentIndex, round, activeList]);
+    let isMounted = true;
 
-  const handleSelectImage = (optionWord: Word) => {
-    if (isAnswering || !currentWord) return;
-    setIsAnswering(true);
-    setSelectedWordId(optionWord.id);
-
-    const isCorrect = optionWord.id === currentWord.id;
-
-    let updatedMissed = missedWords;
-    if (isCorrect) {
-      sounds.playCorrect();
-      if (round === 1) {
-        removeMistake(currentWord.id);
-      }
-    } else {
-      sounds.playWrong();
-      recordMistake(currentWord);
-      if (round === 1) {
-        if (!missedWords.some((w) => w.id === currentWord.id)) {
-          updatedMissed = [...missedWords, currentWord];
-          setMissedWords(updatedMissed);
+    // Preload all 4 images simultaneously before displaying any of them
+    const preloadPromises = fullOptions.map((opt) => {
+      return new Promise<void>((resolve) => {
+        if (!opt.image_url) {
+          resolve();
+          return;
         }
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.src = opt.image_url;
+        if (img.complete) {
+          resolve();
+        }
+      });
+    });
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      setTimeout(resolve, 1200); // 1.2s max fallback in case of slow network
+    });
+
+    Promise.race([Promise.all(preloadPromises), timeoutPromise]).then(() => {
+      if (isMounted) {
+        setIsImagesLoading(false);
       }
+    });
+
+    // Proactively preload the next word's image in background for instant transition
+    const nextWord = words[currentIndex + 1];
+    if (nextWord?.image_url) {
+      const nextImg = new Image();
+      nextImg.src = nextWord.image_url;
     }
 
-    const delay = isCorrect ? 600 : 1200;
+    return () => {
+      isMounted = false;
+      stopAudio();
+    };
+  }, [currentIndex, words, allWords]);
 
-    setTimeout(() => {
-      if (currentIndex + 1 < activeList.length) {
-        setCurrentIndex((prev) => prev + 1);
-        setSelectedWordId(null);
-        setIsAnswering(false);
-      } else {
-        // End of activeList
-        if (round === 1) {
-          if (updatedMissed.length > 0) {
-            // Give ONE second chance for missed words (Round 2)
-            setRound(2);
-            setActiveList(updatedMissed);
-            setCurrentIndex(0);
-            setSelectedWordId(null);
-            setIsAnswering(false);
-          } else {
-            const passed = words.filter((w) => !updatedMissed.some((m) => m.id === w.id));
-            onCompletePhase(passed.length, passed.map((w) => w.id));
-          }
+  const handleSelectImage = (optionWord: Word) => {
+    if (isAnswering || isImagesLoading || !currentWord || wrongImageIds.has(optionWord.id)) return;
+
+    setSelectedWordId(optionWord.id);
+    const isCorrect = optionWord.id === currentWord.id;
+
+    if (isCorrect) {
+      setIsAnswering(true);
+      sounds.playCorrect();
+
+      setTimeout(() => {
+        if (currentIndex + 1 < words.length) {
+          setCurrentIndex((prev) => prev + 1);
         } else {
-          // Round 2 completed, whether correct or wrong, finish phase
-          const passed = words.filter((w) => !updatedMissed.some((m) => m.id === w.id));
-          onCompletePhase(passed.length, passed.map((w) => w.id));
+          const passed = words.filter((w) => !failedWordIds.has(w.id));
+          onCompletePhase(passed.length, passed.map((w) => w.id), Array.from(failedWordIds));
         }
+      }, 700);
+    } else {
+      sounds.playWrong();
+      const updatedWrong = new Set(wrongImageIds).add(optionWord.id);
+      setWrongImageIds(updatedWrong);
+
+      if (updatedWrong.size === 1) {
+        // 1-xato: 2-imkoniyat beriladi!
+        setSecondChanceActive(true);
+      } else {
+        // 2-xato: Rasman xato deb hisoblanadi va xatolar ro'yxatiga qo'shiladi
+        setIsAnswering(true);
+        setShowFailureAlert(true);
+        recordMistake(currentWord);
+        const updatedFailed = new Set(failedWordIds).add(currentWord.id);
+        setFailedWordIds(updatedFailed);
+
+        setTimeout(() => {
+          if (currentIndex + 1 < words.length) {
+            setCurrentIndex((prev) => prev + 1);
+          } else {
+            const passed = words.filter((w) => !updatedFailed.has(w.id));
+            onCompletePhase(passed.length, passed.map((w) => w.id), Array.from(updatedFailed));
+          }
+        }, 1800);
       }
-    }, delay);
+    }
   };
 
   if (!currentWord) return null;
@@ -107,22 +142,18 @@ export const Phase5Visual: React.FC<Phase5VisualProps> = ({
       <div className="w-full flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
           <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-          <span>
-            {round === 1 ? '5-Bosqich: Rasmni topish' : 'Ikkinchi imkoniyat (Qayta sinov)'}
-          </span>
+          <span>5-Bosqich: Rasmni topish</span>
         </span>
         <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
-          {currentIndex + 1} / {activeList.length} (Qoldi: {activeList.length - currentIndex} ta)
+          {currentIndex + 1} / {words.length} (Qoldi: {words.length - currentIndex} ta)
         </span>
       </div>
 
       {/* Progress Line */}
       <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-5">
         <div
-          className={`h-full transition-all duration-200 ${
-            round === 1 ? 'bg-emerald-600 dark:bg-emerald-500' : 'bg-amber-500 dark:bg-amber-400'
-          }`}
-          style={{ width: `${Math.max(5, ((currentIndex + 1) / activeList.length) * 100)}%` }}
+          className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-200"
+          style={{ width: `${Math.max(5, ((currentIndex + 1) / words.length) * 100)}%` }}
         />
       </div>
 
@@ -152,55 +183,92 @@ export const Phase5Visual: React.FC<Phase5VisualProps> = ({
         <p className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-0.5">
           /{currentWord.phonetic}/
         </p>
+
+        {/* 2nd Chance Alert */}
+        {secondChanceActive && !showFailureAlert && (
+          <div className="mt-3 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-center gap-1.5 animate-fadeIn">
+            <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>
+              Noto‘g‘ri rasm! <strong>2-imkoniyat</strong> berildi — to‘g‘ri rasmni tanlang.
+            </span>
+          </div>
+        )}
+
+        {/* 2 Mistakes Failure Alert */}
+        {showFailureAlert && (
+          <div className="mt-3 p-2 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-xs text-red-700 dark:text-red-300 flex items-center justify-center gap-1.5 animate-fadeIn">
+            <RotateCcw className="w-3.5 h-3.5 text-red-500 shrink-0" />
+            <span>
+              2 marta xato qilindi! Xatolar ro‘yxatiga qo‘shildi.
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* 2x2 Grid of 4 Images */}
-      <div className="grid grid-cols-2 gap-3 w-full">
-        {imageOptions.map((opt) => {
-          const isSelected = selectedWordId === opt.id;
-          const isCorrect = opt.id === currentWord.id;
-
-          let cardStyle = 'border-slate-200 dark:border-slate-800 hover:border-emerald-500';
-
-          if (isAnswering) {
-            if (isCorrect) {
-              cardStyle = 'border-emerald-500 ring-2 ring-emerald-500/40';
-            } else if (isSelected && !isCorrect) {
-              cardStyle = 'border-red-500 ring-2 ring-red-500/40 animate-shake opacity-60';
-            } else {
-              cardStyle = 'border-slate-200 dark:border-slate-800 opacity-40';
-            }
-          }
-
-          return (
+      {/* 2x2 Grid of 4 Images: Synchronized Loading Skeleton or Fully Loaded Images */}
+      {isImagesLoading ? (
+        <div className="grid grid-cols-2 gap-3 w-full">
+          {[0, 1, 2, 3].map((idx) => (
             <div
-              key={opt.id}
-              onClick={() => handleSelectImage(opt)}
-              className={`relative h-36 sm:h-44 rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-950 cursor-pointer transition-all duration-150 ${cardStyle}`}
+              key={idx}
+              className="h-36 sm:h-44 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 animate-pulse flex items-center justify-center relative overflow-hidden"
             >
-              <img
-                src={opt.image_url}
-                alt={opt.word}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-
-              {/* Status Overlays */}
-              {isAnswering && isCorrect && (
-                <div className="absolute inset-0 bg-emerald-950/40 flex items-center justify-center">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-400" />
-                </div>
-              )}
-
-              {isAnswering && isSelected && !isCorrect && (
-                <div className="absolute inset-0 bg-red-950/40 flex items-center justify-center">
-                  <XCircle className="w-10 h-10 text-red-400" />
-                </div>
-              )}
+              <div className="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-700 border-t-emerald-500 animate-spin opacity-50" />
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 w-full animate-fadeIn">
+          {imageOptions.map((opt) => {
+            const isSelected = selectedWordId === opt.id;
+            const isCorrect = opt.id === currentWord.id;
+            const isWrong = wrongImageIds.has(opt.id);
+
+            let cardStyle = 'border-slate-200 dark:border-slate-800 hover:border-emerald-500';
+
+            if (isWrong) {
+              cardStyle = 'border-red-500 ring-2 ring-red-500/40 opacity-50 cursor-not-allowed';
+            } else if (isAnswering) {
+              if (isCorrect) {
+                cardStyle = 'border-emerald-500 ring-2 ring-emerald-500/50';
+              } else if (isSelected && !isCorrect) {
+                cardStyle = 'border-red-500 ring-2 ring-red-500/50';
+              } else {
+                cardStyle = 'border-slate-200 dark:border-slate-800 opacity-40 cursor-not-allowed';
+              }
+            }
+
+            return (
+              <div
+                key={opt.id}
+                onClick={() => handleSelectImage(opt)}
+                className={`relative h-36 sm:h-44 rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-950 cursor-pointer transition-all duration-150 ${cardStyle}`}
+              >
+                <img
+                  src={opt.image_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="eager"
+                  decoding="async"
+                />
+
+                {/* Status Overlays */}
+                {isAnswering && isCorrect && (
+                  <div className="absolute inset-0 bg-emerald-950/40 flex items-center justify-center">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                  </div>
+                )}
+
+                {isWrong && (
+                  <div className="absolute inset-0 bg-red-950/40 flex items-center justify-center">
+                    <XCircle className="w-10 h-10 text-red-400" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

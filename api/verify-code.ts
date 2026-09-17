@@ -148,11 +148,14 @@ export default async function handler(req: any, res: any) {
 
       // Extract message IDs to delete
       const toDelete = new Set<number>();
-      if (codeRecord.last_name && codeRecord.last_name.startsWith('msg_')) {
-        const parts = codeRecord.last_name.replace('msg_', '').split('_');
-        for (const p of parts) {
-          const n = parseInt(p, 10);
-          if (!isNaN(n) && n > 0) toDelete.add(n);
+      if (codeRecord.last_name) {
+        const rawMsgPart = codeRecord.last_name.split('|')[0];
+        if (rawMsgPart.startsWith('msg_')) {
+          const parts = rawMsgPart.replace('msg_', '').split('_');
+          for (const p of parts) {
+            const n = parseInt(p, 10);
+            if (!isNaN(n) && n > 0) toDelete.add(n);
+          }
         }
       }
 
@@ -171,7 +174,7 @@ export default async function handler(req: any, res: any) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: codeRecord.telegram_id,
-          text: '🎉 <b>Tizimga kirganingiz bilan tabriklaymiz!</b>',
+          text: '🎉 <b>Tizimga kirganingiz bilan tabriklaymiz!</b>\n\nBarcha darslar va shaxsiy o‘rganish rejangiz platformada faollashtirildi.',
           parse_mode: 'HTML',
           reply_markup: {
             keyboard: [[{ text: '🔑 Kirish kodini olish' }]],
@@ -181,7 +184,17 @@ export default async function handler(req: any, res: any) {
       }).catch(() => {});
     }
 
-    return res.status(200).json({ ok: true, profile: finalProfile });
+    // Extract user goal from auth record if present
+    let userGoal: { track?: string; target?: string; daily?: string } | null = null;
+    if (codeRecord.last_name && codeRecord.last_name.includes('|goal:')) {
+      const goalPart = codeRecord.last_name.split('|goal:')[1];
+      if (goalPart) {
+        const [track, target, daily] = goalPart.split('_');
+        userGoal = { track, target, daily };
+      }
+    }
+
+    return res.status(200).json({ ok: true, profile: finalProfile, goal: userGoal });
   } catch (err: any) {
     console.error('[verify-code] Error:', err);
     return res.status(500).json({ error: 'Ichki server xatoligi.' });

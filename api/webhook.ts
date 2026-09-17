@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://edxexhujreeckecqbryy.supabase.co';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_ha2IXQ54aPfxHLDSW6RQnA_8Miju1HS';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: any) {
   const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -22,11 +22,49 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: a
         reply_markup: replyMarkup
       })
     });
-    const result = await res.json();
-    console.log('[Webhook] Telegram send response:', result);
-    return result;
+    return await res.json();
   } catch (err) {
     console.error('[Webhook] Failed to send telegram message:', err);
+    return null;
+  }
+}
+
+async function editTelegramMessage(chatId: number, messageId: number, text: string, replyMarkup?: any) {
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup
+      })
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('[Webhook] Failed to edit telegram message:', err);
+    return null;
+  }
+}
+
+async function answerTelegramCallback(callbackQueryId: string, text?: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text || ''
+      })
+    });
+    return await res.json();
+  } catch (err) {
     return null;
   }
 }
@@ -49,10 +87,18 @@ async function deleteTelegramMessage(chatId: number, messageId: number) {
   }
 }
 
+// Feature Flag & Admin Whitelist for safe production testing
+const ADMIN_IDS = [1102377043];
+const IS_ONBOARDING_PUBLIC = false; // When Boss approves, set to true to enable for everyone!
+
 export default async function handler(req: any, res: any) {
-  // Allow GET request for health check
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'ok', service: 'LEXIS 4000 Telegram Webhook' });
+    return res.status(200).json({ 
+      status: 'ok', 
+      service: 'LEXIS 4000 Telegram Webhook v2',
+      onboarding_public: IS_ONBOARDING_PUBLIC,
+      admins: ADMIN_IDS
+    });
   }
 
   if (req.method !== 'POST') {
@@ -60,18 +106,196 @@ export default async function handler(req: any, res: any) {
   }
 
   const update = req.body;
-  if (!update || !update.message) {
+  if (!update) {
     return res.status(200).json({ ok: true });
   }
 
-  const msg = update.message;
-  const chatId = msg.chat.id;
-  const from = msg.from;
-  const text = msg.text?.trim() || '';
   const nowIso = new Date().toISOString();
 
   try {
-    // 1. Fetch user profile from Supabase
+    // ==========================================
+    // A. HANDLE INLINE BUTTON CALLBACK QUERIES
+    // ==========================================
+    if (update.callback_query) {
+      const cq = update.callback_query;
+      const data = cq.data || '';
+      const chatId = cq.message?.chat?.id;
+      const messageId = cq.message?.message_id;
+      const from = cq.from;
+
+      await answerTelegramCallback(cq.id);
+
+      if (!chatId || !messageId) {
+        return res.status(200).json({ ok: true });
+      }
+
+      // 1. Start onboarding
+      if (data === 'cb_start_onboarding') {
+        await editTelegramMessage(
+          chatId,
+          messageId,
+          `Assalomu alaykum, <b>${from.first_name}</b>!\n\n` +
+          `Siz uchun eng mos va samarali shaxsiy ta’lim rejasini tuzamiz:\n\n` +
+          `<b>1-savol:</b> Asosiy maqsadingiz qaysi yo‘nalish?`,
+          {
+            inline_keyboard: [
+              [{ text: '🎓 CEFR (A1 — C1)', callback_data: 'cb_track:cefr' }],
+              [{ text: '🎯 IELTS (Band 9)', callback_data: 'cb_track:ielts' }],
+              [{ text: '🗣 Umumiy Ingliz tili', callback_data: 'cb_track:general' }]
+            ]
+          }
+        );
+        return res.status(200).json({ ok: true });
+      }
+
+      // 2. Track selected -> Ask Target Level
+      if (data.startsWith('cb_track:')) {
+        const track = data.split(':')[1];
+
+        if (track === 'cefr') {
+          await editTelegramMessage(
+            chatId,
+            messageId,
+            `🎓 <b>CEFR yo‘nalishi tanlandi.</b>\n\n` +
+            `<b>2-savol:</b> Qaysi darajani egallashni maqsad qildingiz?`,
+            {
+              inline_keyboard: [
+                [{ text: 'A2 (Elementary)', callback_data: 'cb_target:cefr:A2' }],
+                [{ text: 'B1 (Pre-Intermediate)', callback_data: 'cb_target:cefr:B1' }],
+                [{ text: 'B2 (Upper-Intermediate)', callback_data: 'cb_target:cefr:B2' }],
+                [{ text: 'C1 (Academic Mastery)', callback_data: 'cb_target:cefr:C1' }]
+              ]
+            }
+          );
+        } else if (track === 'ielts') {
+          await editTelegramMessage(
+            chatId,
+            messageId,
+            `🎯 <b>IELTS yo‘nalishi tanlandi.</b>\n\n` +
+            `<b>2-savol:</b> IELTS bo‘yicha maqsad ballingiz qanday?`,
+            {
+              inline_keyboard: [
+                [
+                  { text: 'Band 6.0', callback_data: 'cb_target:ielts:6.0' },
+                  { text: 'Band 6.5', callback_data: 'cb_target:ielts:6.5' }
+                ],
+                [
+                  { text: 'Band 7.0', callback_data: 'cb_target:ielts:7.0' },
+                  { text: 'Band 7.5', callback_data: 'cb_target:ielts:7.5' }
+                ],
+                [
+                  { text: 'Band 8.0+', callback_data: 'cb_target:ielts:8.0' }
+                ]
+              ]
+            }
+          );
+        } else {
+          await editTelegramMessage(
+            chatId,
+            messageId,
+            `🗣 <b>Umumiy Ingliz tili tanlandi.</b>\n\n` +
+            `<b>2-savol:</b> Lug‘at boyligingizni qancha so‘zga yetkazmoqchisiz?`,
+            {
+              inline_keyboard: [
+                [{ text: '1000 ta so‘z (Kundalik so‘zlashuv)', callback_data: 'cb_target:general:1000' }],
+                [{ text: '2000 ta so‘z (Erkin muloqot)', callback_data: 'cb_target:general:2000' }],
+                [{ text: '4000 ta so‘z (Barcha 6 kitob)', callback_data: 'cb_target:general:4000' }]
+              ]
+            }
+          );
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      // 3. Target Level selected -> Ask Daily Capacity (1 word = 1 XP)
+      if (data.startsWith('cb_target:')) {
+        const parts = data.split(':');
+        const track = parts[1];
+        const target = parts[2];
+
+        await editTelegramMessage(
+          chatId,
+          messageId,
+          `✅ Maqsad: <b>${track.toUpperCase()} ${target}</b>\n\n` +
+          `<b>3-savol:</b> Kuniga nechta so‘z yodlashni rejalashtirasiz?\n` +
+          `<i>(Qoida: LEXIS 4000 da 1 ta so‘z = 1 XP)</i>`,
+          {
+            inline_keyboard: [
+              [{ text: '⚡️ 10 ta so‘z (10 XP • Yengil • ~10 daqiqa)', callback_data: `cb_daily:${track}:${target}:10` }],
+              [{ text: '🔥 20 ta so‘z (20 XP • 1 unit • Standart)', callback_data: `cb_daily:${track}:${target}:20` }],
+              [{ text: '🚀 40 ta so‘z (40 XP • 2 unit • Intensiv)', callback_data: `cb_daily:${track}:${target}:40` }]
+            ]
+          }
+        );
+        return res.status(200).json({ ok: true });
+      }
+
+      // 4. Daily Capacity selected -> Show Summary & Get Code Button
+      if (data.startsWith('cb_daily:')) {
+        const parts = data.split(':');
+        const track = parts[1];
+        const target = parts[2];
+        const daily = parts[3];
+
+        const trackTitle = track === 'ielts' ? 'IELTS' : track === 'cefr' ? 'CEFR' : 'Umumiy leksika';
+
+        await editTelegramMessage(
+          chatId,
+          messageId,
+          `🎉 <b>Ajoyib, shaxsiy ta’lim rejangiz muvaffaqiyatli tuzildi!</b>\n\n` +
+          `🎯 Yo‘nalish: <b>${trackTitle}</b>\n` +
+          `🏆 Maqsad daraja: <b>${target}</b>\n` +
+          `⚡️ Kunlik reja: <b>${daily} ta so‘z (${daily} XP)</b>\n\n` +
+          `Barcha parametrlar profilingizga biriktirildi. Platformaga kirish uchun quyidagi tugmani bosing:`,
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: '🔑 Kirish kodini olish',
+                  callback_data: `cb_code:${track}:${target}:${daily}`
+                }
+              ]
+            ]
+          }
+        );
+
+        // Also restore main reply keyboard
+        await sendTelegramMessage(chatId, 'Pastdagi menyu orqali ham istalgan payt kod olishingiz mumkin:', {
+          keyboard: [[{ text: '🔑 Kirish kodini olish' }]],
+          resize_keyboard: true
+        });
+
+        return res.status(200).json({ ok: true });
+      }
+
+      // 5. Generate Code from callback
+      if (data.startsWith('cb_code:')) {
+        const parts = data.split(':');
+        const track = parts[1];
+        const target = parts[2];
+        const daily = parts[3];
+
+        const goalMeta = `${track}_${target}_${daily}`;
+        await generateAndSendCode(chatId, from, '', from.first_name || 'O‘quvchi', messageId, goalMeta);
+        return res.status(200).json({ ok: true });
+      }
+
+      return res.status(200).json({ ok: true });
+    }
+
+    // ==========================================
+    // B. HANDLE STANDARD MESSAGES
+    // ==========================================
+    if (!update.message) {
+      return res.status(200).json({ ok: true });
+    }
+
+    const msg = update.message;
+    const chatId = msg.chat.id;
+    const from = msg.from;
+    const text = msg.text?.trim() || '';
+
+    // 1. Fetch user profile
     let userProfile: any = null;
     const { data: profile } = await supabase
       .from('profiles')
@@ -80,7 +304,40 @@ export default async function handler(req: any, res: any) {
       .maybeSingle();
     userProfile = profile;
 
-    // 2. Handle Contact Sharing (First-time registration)
+    // 2. Check and clean up expired unused codes
+    const { data: expiredCodes } = await supabase
+      .from('telegram_auth_codes')
+      .select('*')
+      .eq('telegram_id', from.id)
+      .eq('used', false)
+      .lte('expires_at', nowIso)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (expiredCodes && expiredCodes.length > 0) {
+      await supabase
+        .from('telegram_auth_codes')
+        .update({ used: true })
+        .eq('id', expiredCodes[0].id);
+
+      if (expiredCodes[0].last_name && expiredCodes[0].last_name.startsWith('msg_')) {
+        const rawIds = expiredCodes[0].last_name.split('|')[0].replace('msg_', '').split('_').map(Number).filter(Boolean);
+        for (const mId of rawIds) {
+          await deleteTelegramMessage(chatId, mId);
+        }
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `❌ <b>Kod ishlatilmadi</b> (3 daqiqalik muddati tugadi).\n\nYangi kod olish uchun pastdagi tugmani bosing:`,
+        {
+          keyboard: [[{ text: '🔑 Kirish kodini olish' }]],
+          resize_keyboard: true
+        }
+      );
+    }
+
+    // 3. Handle Contact Sharing (First-time registration -> Start Onboarding)
     if (msg.contact) {
       const contact = msg.contact;
       const phoneNumber = contact.phone_number.startsWith('+')
@@ -113,11 +370,33 @@ export default async function handler(req: any, res: any) {
           .eq('telegram_id', from.id);
       }
 
-      await generateAndSendCode(chatId, from, phoneNumber, fullName, msg.message_id);
+      const isAdmin = ADMIN_IDS.includes(from.id);
+      const shouldShowOnboarding = IS_ONBOARDING_PUBLIC || isAdmin;
+
+      if (shouldShowOnboarding) {
+        // Start onboarding questions
+        await sendTelegramMessage(
+          chatId,
+          `Assalomu alaykum, <b>${fullName}</b>!\n\n` +
+          `<b>LEXIS 4000</b> platformasiga xush kelibsiz! 🚀\n\n` +
+          `Siz uchun eng mos va samarali shaxsiy ta’lim rejasini tuzishimiz uchun 3 ta qisqa savolga javob bering:\n\n` +
+          `<b>1-savol:</b> Asosiy maqsadingiz qaysi yo‘nalish?`,
+          {
+            inline_keyboard: [
+              [{ text: '🎓 CEFR (A1 — C1)', callback_data: 'cb_track:cefr' }],
+              [{ text: '🎯 IELTS (Band 9)', callback_data: 'cb_track:ielts' }],
+              [{ text: '🗣 Umumiy Ingliz tili', callback_data: 'cb_track:general' }]
+            ]
+          }
+        );
+      } else {
+        // Regular production users get their code immediately without friction
+        await generateAndSendCode(chatId, from, phoneNumber, fullName, msg.message_id);
+      }
       return res.status(200).json({ ok: true });
     }
 
-    // 3. Check for existing active (unexpired & unused) code
+    // 4. Check for active unexpired code
     const { data: activeCodes } = await supabase
       .from('telegram_auth_codes')
       .select('*')
@@ -129,8 +408,7 @@ export default async function handler(req: any, res: any) {
 
     const activeCode = activeCodes && activeCodes.length > 0 ? activeCodes[0] : null;
 
-    // If an active code exists and user sends a message or requests code again
-    if (activeCode) {
+    if (activeCode && (text === '🔑 Kirish kodini olish' || text === '/code' || text === '/login')) {
       const remainingMs = new Date(activeCode.expires_at).getTime() - Date.now();
       const remainingSec = Math.max(0, Math.round(remainingMs / 1000));
       const mins = Math.floor(remainingSec / 60);
@@ -153,35 +431,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true });
     }
 
-    // Check if there was an expired code that wasn't used
-    const { data: expiredCodes } = await supabase
-      .from('telegram_auth_codes')
-      .select('*')
-      .eq('telegram_id', from.id)
-      .eq('used', false)
-      .lte('expires_at', nowIso)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (expiredCodes && expiredCodes.length > 0) {
-      // Mark as used
-      await supabase
-        .from('telegram_auth_codes')
-        .update({ used: true })
-        .eq('id', expiredCodes[0].id);
-
-      // If previous message ids were tracked in last_name, delete them
-      if (expiredCodes[0].last_name && expiredCodes[0].last_name.startsWith('msg_')) {
-        const ids = expiredCodes[0].last_name.replace('msg_', '').split('_').map(Number).filter(Boolean);
-        for (const mId of ids) {
-          await deleteTelegramMessage(chatId, mId);
-        }
-      }
-
-      await sendTelegramMessage(chatId, `❌ <b>Kod ishlatilmadi</b>`);
-    }
-
-    // 4. Handle "🔑 Kirish kodini olish" button or /login /code
+    // 5. Handle "🔑 Kirish kodini olish" button
     if (text === '🔑 Kirish kodini olish' || text === '/login' || text === '/code') {
       if (!userProfile) {
         await sendTelegramMessage(
@@ -200,11 +450,42 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true });
     }
 
-    // 5. Default Greeting
+    // 6. Handle /id command
+    if (text === '/id' || text === '/myid') {
+      await sendTelegramMessage(chatId, `🆔 Sizning Telegram ID: <code>${from.id}</code>`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // 7. Handle /test, /beta, /onboarding or /goals
+    if (
+      text === '/test' || 
+      text === '/beta' || 
+      text === '/onboarding' || 
+      text === '/goals' || 
+      text === '🎯 Maqsadni o‘zgartirish'
+    ) {
+      await sendTelegramMessage(
+        chatId,
+        `Assalomu alaykum, <b>${from.first_name}</b>!\n\n` +
+        `🚀 <b>LEXIS 4000: Shaxsiy Ta’lim Rejasini Sinash (Beta Mode)</b>\n\n` +
+        `<b>1-savol:</b> Asosiy maqsadingiz qaysi yo‘nalish?`,
+        {
+          inline_keyboard: [
+            [{ text: '🎓 CEFR (A1 — C1)', callback_data: 'cb_track:cefr' }],
+            [{ text: '🎯 IELTS (Band 9)', callback_data: 'cb_track:ielts' }],
+            [{ text: '🗣 Umumiy Ingliz tili', callback_data: 'cb_track:general' }]
+          ]
+        }
+      );
+      return res.status(200).json({ ok: true });
+    }
+
+    // 7. Default Greeting
     if (userProfile) {
       await sendTelegramMessage(
         chatId,
-        `Assalomu alaykum, <b>${userProfile.full_name || from.first_name}</b>!\n\nSaytga kirish uchun quyidagi <b>«🔑 Kirish kodini olish»</b> tugmasini bosing:`,
+        `Assalomu alaykum, <b>${userProfile.full_name || from.first_name}</b>!\n\n` +
+        `Saytga kirish uchun quyidagi <b>«🔑 Kirish kodini olish»</b> tugmasini bosing:`,
         {
           keyboard: [[{ text: '🔑 Kirish kodini olish' }]],
           resize_keyboard: true
@@ -213,7 +494,9 @@ export default async function handler(req: any, res: any) {
     } else {
       await sendTelegramMessage(
         chatId,
-        `Assalomu alaykum, <b>${from.first_name || 'Qadrdon o‘quvchi'}</b>!\n\n<b>LEXIS 4000</b> platformasiga xush kelibsiz.\n\nBir martalik ro‘yxatdan o‘tish uchun quyidagi <b>«📱 Telefon raqamni yuborish»</b> tugmasini bosing:`,
+        `Assalomu alaykum, <b>${from.first_name || 'Qadrdon o‘quvchi'}</b>!\n\n` +
+        `<b>LEXIS 4000</b> platformasiga xush kelibsiz.\n\n` +
+        `Bir martalik ro‘yxatdan o‘tish va shaxsiy ta’lim rejangizni tuzish uchun <b>«📱 Telefon raqamni yuborish»</b> tugmasini bosing:`,
         {
           keyboard: [[{ text: '📱 Telefon raqamni yuborish', request_contact: true }]],
           resize_keyboard: true,
@@ -229,14 +512,15 @@ export default async function handler(req: any, res: any) {
   }
 }
 
-async function generateAndSendCode(chatId: number, from: any, phoneNumber: string, fullName: string, userMsgId?: number) {
-  // 1. Remove keyboard immediately
-  const removeMsg = await sendTelegramMessage(chatId, '⏳', { remove_keyboard: true });
-  if (removeMsg?.result?.message_id) {
-    await deleteTelegramMessage(chatId, removeMsg.result.message_id);
-  }
-
-  // 2. Clean up any previous unexpired code messages in chat
+async function generateAndSendCode(
+  chatId: number, 
+  from: any, 
+  phoneNumber: string, 
+  _fullName: string, 
+  userMsgId?: number, 
+  goalMeta?: string
+) {
+  // 1. Clean up any previous unexpired codes in chat
   try {
     const { data: prevCodes } = await supabase
       .from('telegram_auth_codes')
@@ -247,7 +531,8 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
     if (prevCodes && prevCodes.length > 0) {
       for (const pc of prevCodes) {
         if (pc.last_name && pc.last_name.startsWith('msg_')) {
-          const ids = pc.last_name.replace('msg_', '').split('_').map(Number).filter(Boolean);
+          const rawPart = pc.last_name.split('|')[0];
+          const ids = rawPart.replace('msg_', '').split('_').map(Number).filter(Boolean);
           for (const mId of ids) {
             await deleteTelegramMessage(chatId, mId);
           }
@@ -261,6 +546,21 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
     }
   } catch (_) {}
 
+  // 2. Fetch phone if empty
+  let userPhone = phoneNumber;
+  if (!userPhone) {
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('phone_number')
+        .eq('telegram_id', from.id)
+        .maybeSingle();
+      if (prof?.phone_number) {
+        userPhone = prof.phone_number;
+      }
+    } catch (_) {}
+  }
+
   // 3. Generate 6-digit code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAtMs = Date.now() + 3 * 60 * 1000;
@@ -269,7 +569,9 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
   // 4. Send code message with inline button
   const sentMsg = await sendTelegramMessage(
     chatId,
-    `🔐 <b>Sizning bir martalik tasdiqlash kodingiz:</b>\n\n<code>${code}</code>\n\n⏳ Ushbu kod <b>3 daqiqa</b> davomida amal qiladi.`,
+    `🔐 <b>Sizning bir martalik tasdiqlash kodingiz:</b>\n\n` +
+    `<code>${code}</code>\n\n` +
+    `⏳ Ushbu kod <b>3 daqiqa</b> davomida amal qiladi.`,
     {
       inline_keyboard: [
         [
@@ -286,7 +588,11 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
   const msgIds: number[] = [];
   if (sentMessageId) msgIds.push(sentMessageId);
   if (userMsgId) msgIds.push(userMsgId);
-  const msgTracker = msgIds.length > 0 ? `msg_${msgIds.join('_')}` : '';
+
+  let msgTracker = msgIds.length > 0 ? `msg_${msgIds.join('_')}` : '';
+  if (goalMeta) {
+    msgTracker += `|goal:${goalMeta}`;
+  }
 
   // 5. Save into database
   await supabase
@@ -295,7 +601,7 @@ async function generateAndSendCode(chatId: number, from: any, phoneNumber: strin
       {
         code,
         telegram_id: from.id,
-        phone_number: phoneNumber,
+        phone_number: userPhone,
         first_name: from.first_name,
         last_name: msgTracker,
         username: from.username || '',

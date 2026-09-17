@@ -146,9 +146,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
 
                   {/* Metrics */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400 font-semibold" title={`${user.streak_days || 1} kun ketma-ket`}>
+                    <div className="flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400 font-semibold" title={`${user.streak_days || 0} kun ketma-ket`}>
                       <Flame className="w-3 h-3 fill-amber-500 text-amber-500" />
-                      <span>{user.streak_days || 1}k</span>
+                      <span>{user.streak_days || 0}k</span>
                     </div>
 
                     <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-xs font-mono font-bold">

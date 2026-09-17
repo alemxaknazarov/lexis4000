@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, AlertCircle, CheckCircle2, RefreshCw, Sun, Moon, ArrowLeft, Trophy } from 'lucide-react';
+import { Sparkles, AlertCircle, CheckCircle2, RefreshCw, ArrowLeft, Trophy } from 'lucide-react';
 import type { UserProfile } from '../lib/supabase';
 import { sounds } from '../utils/soundEffects';
 import { saveSession } from '../utils/sessionManager';
@@ -9,77 +9,48 @@ interface LoginPageProps {
   onSuccess: (profile: UserProfile) => void;
   onGoHome: () => void;
   onOpenLeaderboard: () => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
+  isDark?: boolean;
+  onToggleTheme?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onSuccess,
   onGoHome,
-  onOpenLeaderboard,
-  isDark,
-  onToggleTheme
+  onOpenLeaderboard
 }) => {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
+  const [code, setCode] = useState<string>('');
+  const [isFocused, setIsFocused] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Focus first input on mount
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Focus single input on mount
     setTimeout(() => {
-      inputRefs.current[0]?.focus();
+      inputRef.current?.focus();
     }, 150);
   }, []);
 
-  const handleDigitChange = (index: number, val: string) => {
-    const char = val.replace(/\D/g, '').slice(-1);
-    const newDigits = [...digits];
-    newDigits[index] = char;
-    setDigits(newDigits);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setCode(rawVal);
     setErrorMsg(null);
 
-    // Auto-advance
-    if (char && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit when all 6 digits are typed
-    const fullCode = newDigits.join('');
-    if (fullCode.length === 6) {
-      verifyCode(fullCode);
-    }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!pasted) return;
-
-    const newDigits = [...digits];
-    for (let i = 0; i < 6; i++) {
-      newDigits[i] = pasted[i] || '';
-    }
-    setDigits(newDigits);
-    setErrorMsg(null);
-
-    if (pasted.length === 6) {
-      verifyCode(pasted);
-    } else {
-      inputRefs.current[Math.min(pasted.length, 5)]?.focus();
+    if (rawVal.length === 6) {
+      verifyCode(rawVal);
     }
   };
 
   const verifyCode = async (codeToVerify?: string) => {
-    const code = codeToVerify || digits.join('');
-    if (code.length !== 6) {
+    const codeVal = codeToVerify || code;
+    if (codeVal.length !== 6) {
       setErrorMsg('Iltimos, 6 xonali kodni to‘liq kiriting.');
       return;
     }
@@ -88,7 +59,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setErrorMsg(null);
 
     try {
-      const finalProfile = await verifyTelegramOtp(code);
+      const finalProfile = await verifyTelegramOtp(codeVal);
       saveSession(finalProfile);
 
       sounds.playCorrect();
@@ -151,17 +122,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </button>
           </nav>
 
-          {/* Right: Theme Toggle & Home Back */}
+          {/* Right: Home Back */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={onToggleTheme}
-              title={isDark ? "Yorug' rejim" : "Qorong'u rejim"}
-              aria-label="Rejimni o'zgartirish"
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 transition cursor-pointer shrink-0"
-            >
-              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
-            </button>
-
             <button
               onClick={onGoHome}
               className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-800 transition cursor-pointer shrink-0"
@@ -208,23 +170,52 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             telegram botiga kiring va 3 daqiqalik kodingizni oling.
           </p>
 
-          {/* 6 Clean Rounded Input Slots (Identical to 42.uz) */}
-          <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6">
-            {digits.map((digit, idx) => (
-              <input
-                key={idx}
-                ref={(el) => { inputRefs.current[idx] = el; }}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleDigitChange(idx, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(idx, e)}
-                onPaste={handlePaste}
-                disabled={loading}
-                className="w-11 h-14 sm:w-13 sm:h-16 text-center font-mono font-bold text-xl sm:text-2xl rounded-2xl border border-slate-300 dark:border-slate-700 bg-transparent text-slate-900 dark:text-white focus:border-slate-900 dark:focus:border-white focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/10 outline-none transition shadow-2xs"
-              />
-            ))}
+          {/* 6 Clean Rounded Slots with a Single Unflickering Master Input */}
+          <div 
+            onClick={() => inputRef.current?.focus()}
+            className="relative flex items-center justify-center gap-2 sm:gap-3 mb-6 cursor-text select-none"
+          >
+            {/* Hidden Single Input that handles all keystrokes and keeps keyboard steadily open */}
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={handleChange}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              disabled={loading}
+              className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-text"
+              aria-label="6 xonali tasdiqlash kodi"
+            />
+
+            {/* 6 Visual Display Boxes */}
+            {[0, 1, 2, 3, 4, 5].map((idx) => {
+              const char = code[idx] || '';
+              const isActive = isFocused && (code.length === idx || (code.length === 6 && idx === 5));
+
+              return (
+                <div
+                  key={idx}
+                  className={`w-11 h-14 sm:w-13 sm:h-16 flex items-center justify-center font-mono font-bold text-xl sm:text-2xl rounded-2xl border transition-all duration-150 shadow-2xs ${
+                    isActive
+                      ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/10 dark:ring-white/20 scale-[1.03] bg-white dark:bg-slate-900 text-slate-900 dark:text-white'
+                      : char
+                      ? 'border-emerald-500/80 dark:border-emerald-500/80 bg-emerald-50/20 dark:bg-emerald-950/20 text-slate-900 dark:text-white'
+                      : 'border-slate-300 dark:border-slate-700 bg-transparent text-slate-900 dark:text-white'
+                  }`}
+                >
+                  {char ? (
+                    <span>{char}</span>
+                  ) : isActive ? (
+                    <span className="w-0.5 h-6 bg-slate-900 dark:bg-white animate-pulse" />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
 
           {/* Feedback states */}

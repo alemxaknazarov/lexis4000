@@ -26,6 +26,11 @@ class SoundEngine {
     }
   }
 
+  public isEnabled(): boolean {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('lexis_sound_fx') !== 'false';
+  }
+
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     if (!this.ctx) {
@@ -116,6 +121,8 @@ class SoundEngine {
    * Apple Pay / App Store payment confirmation chime (Correct Answer)
    */
   playCorrect() {
+    if (!this.isEnabled()) return;
+
     // 1. Try zero-latency Web Audio buffer
     if (this.correctBuffer && this.playBuffer(this.correctBuffer, 0.9)) {
       return;
@@ -134,6 +141,8 @@ class SoundEngine {
    * Apple Pay / iOS rejection double-thud tone (Wrong Answer)
    */
   playWrong() {
+    if (!this.isEnabled()) return;
+
     // 1. Try zero-latency Web Audio buffer
     if (this.wrongBuffer && this.playBuffer(this.wrongBuffer, 0.85)) {
       return;
@@ -216,6 +225,7 @@ class SoundEngine {
    * Victory fanfare for Phase 6 Summary
    */
   playVictory() {
+    if (!this.isEnabled()) return;
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -242,6 +252,7 @@ class SoundEngine {
    * Crisp UI touch / click sound
    */
   playClick() {
+    if (!this.isEnabled()) return;
     const ctx = this.getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
