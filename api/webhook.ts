@@ -238,6 +238,21 @@ export default async function handler(req: any, res: any) {
         const daily = parts[3];
 
         const trackTitle = track === 'ielts' ? 'IELTS' : track === 'cefr' ? 'CEFR' : 'Umumiy leksika';
+        const goalMeta = `${track}_${target}_${daily}`;
+
+        // Save goal anchor in database immediately so it persists forever
+        try {
+          await supabase.from('telegram_auth_codes').insert([{
+            code: '000000',
+            telegram_id: from.id,
+            phone_number: '',
+            first_name: from.first_name || '',
+            last_name: `anchor|goal:${goalMeta}`,
+            username: from.username || '',
+            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            used: true
+          }]);
+        } catch (_) {}
 
         await editTelegramMessage(
           chatId,
@@ -589,9 +604,28 @@ async function generateAndSendCode(
   if (sentMessageId) msgIds.push(sentMessageId);
   if (userMsgId) msgIds.push(userMsgId);
 
+  // If goalMeta not passed directly, fetch user's latest saved goal
+  let finalGoalMeta = goalMeta;
+  if (!finalGoalMeta) {
+    try {
+      const { data: latestAnchor } = await supabase
+        .from('telegram_auth_codes')
+        .select('last_name')
+        .eq('telegram_id', from.id)
+        .like('last_name', '%|goal:%')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestAnchor?.last_name && latestAnchor.last_name.includes('|goal:')) {
+        finalGoalMeta = latestAnchor.last_name.split('|goal:')[1];
+      }
+    } catch (_) {}
+  }
+
   let msgTracker = msgIds.length > 0 ? `msg_${msgIds.join('_')}` : '';
-  if (goalMeta) {
-    msgTracker += `|goal:${goalMeta}`;
+  if (finalGoalMeta) {
+    msgTracker += `|goal:${finalGoalMeta}`;
   }
 
   // 5. Save into database

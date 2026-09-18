@@ -194,6 +194,24 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    if (!userGoal && codeRecord.telegram_id) {
+      try {
+        const { data: latestAnchor } = await supabase
+          .from('telegram_auth_codes')
+          .select('last_name')
+          .eq('telegram_id', codeRecord.telegram_id)
+          .like('last_name', '%|goal:%')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestAnchor?.last_name && latestAnchor.last_name.includes('|goal:')) {
+          const [track, target, daily] = latestAnchor.last_name.split('|goal:')[1].split('_');
+          userGoal = { track, target, daily };
+        }
+      } catch (_) {}
+    }
+
     return res.status(200).json({ ok: true, profile: finalProfile, goal: userGoal });
   } catch (err: any) {
     console.error('[verify-code] Error:', err);

@@ -290,7 +290,7 @@ async function startCodeSession(chatId: number, from: any, phoneNumber: string, 
     return;
   }
 
-  // 3. Send code message with inline button: "🌐 Saytga kirish" -> https://lexis.uz/login
+  // 3. Send code message with inline button: "🌐 Saytga kirish" -> https://lexis4000.uz/login
   const sentMsg = await sendTelegramMessage(
     chatId,
     `🔐 <b>Sizning bir martalik tasdiqlash kodingiz:</b>\n\n<code>${code}</code>\n\n⏳ Ushbu kod <b>3 daqiqa</b> davomida amal qiladi.`,

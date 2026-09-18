@@ -57,6 +57,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     return localStorage.getItem('lexis_target_level') || (learningTrack === 'ielts' ? '7.0' : 'B2');
   });
 
+  const [dailyGoal, setDailyGoal] = useState<string>(() => {
+    if (typeof window === 'undefined') return '20';
+    return localStorage.getItem('lexis_daily_goal') || '20';
+  });
+
   const [userBio, setUserBio] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
     return localStorage.getItem(`lexis_bio_${userProfile.id}`) || '';
@@ -67,6 +72,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   const [editBio, setEditBio] = useState<string>(userBio);
   const [editTrack, setEditTrack] = useState<LearningTrack>(learningTrack);
   const [editTarget, setEditTarget] = useState<string>(targetLevel);
+  const [editDaily, setEditDaily] = useState<string>(dailyGoal);
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
 
   // Sync edit fields when userProfile or modal changes
@@ -75,7 +81,47 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     setEditBio(userBio);
     setEditTrack(learningTrack);
     setEditTarget(targetLevel);
-  }, [userProfile.full_name, userBio, learningTrack, targetLevel, isEditModalOpen]);
+    setEditDaily(dailyGoal);
+  }, [userProfile.full_name, userBio, learningTrack, targetLevel, dailyGoal, isEditModalOpen]);
+
+  // Sync goal from Telegram Bot anchor if available
+  useEffect(() => {
+    const syncBotGoal = async () => {
+      if (!userProfile.telegram_id) return;
+      try {
+        const { data } = await supabase
+          .from('telegram_auth_codes')
+          .select('last_name')
+          .eq('telegram_id', userProfile.telegram_id)
+          .like('last_name', '%|goal:%')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data?.last_name) {
+          const match = data.last_name.match(/\|goal:(ielts|cefr)_([^_]+)_(\d+)/);
+          if (match) {
+            const [, track, target, daily] = match;
+            if (track) {
+              setLearningTrack(track as LearningTrack);
+              localStorage.setItem('lexis_learning_track', track);
+            }
+            if (target) {
+              setTargetLevel(target);
+              localStorage.setItem('lexis_target_level', target);
+            }
+            if (daily) {
+              setDailyGoal(daily);
+              localStorage.setItem('lexis_daily_goal', daily);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync bot goal:', err);
+      }
+    };
+    syncBotGoal();
+  }, [userProfile.telegram_id]);
 
   // Scroll to top
   useEffect(() => {
@@ -140,13 +186,28 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   };
 
   // Change Track handler
-  const handleTrackChange = (track: LearningTrack) => {
+  const handleTrackChange = async (track: LearningTrack) => {
     sounds.playClick();
     setLearningTrack(track);
     localStorage.setItem('lexis_learning_track', track);
     const defaultTarget = track === 'ielts' ? '7.0' : 'B2';
     setTargetLevel(defaultTarget);
     localStorage.setItem('lexis_target_level', defaultTarget);
+
+    if (userProfile.telegram_id) {
+      try {
+        await supabase.from('telegram_auth_codes').insert({
+          telegram_id: userProfile.telegram_id,
+          code: '000000',
+          first_name: userProfile.full_name || '',
+          last_name: `anchor|goal:${track}_${defaultTarget}_${dailyGoal}`,
+          used: true,
+          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        });
+      } catch (e) {
+        console.warn('Anchor update error:', e);
+      }
+    }
   };
 
   // Avatar select
@@ -165,7 +226,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     }
   };
 
-  // Save profile edits (Name, bio, track, target)
+  // Save profile edits (Name, bio, track, target, daily goal)
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editName.trim()) return;
@@ -194,6 +255,24 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       setTargetLevel(editTarget);
       localStorage.setItem('lexis_target_level', editTarget);
 
+      setDailyGoal(editDaily);
+      localStorage.setItem('lexis_daily_goal', editDaily);
+
+      if (userProfile.telegram_id) {
+        try {
+          await supabase.from('telegram_auth_codes').insert({
+            telegram_id: userProfile.telegram_id,
+            code: '000000',
+            first_name: trimmedName,
+            last_name: `anchor|goal:${editTrack}_${editTarget}_${editDaily}`,
+            used: true,
+            expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          });
+        } catch (e) {
+          console.warn('Anchor update error:', e);
+        }
+      }
+
       setIsEditModalOpen(false);
     } catch (err) {
       console.error('Error saving profile:', err);
@@ -202,16 +281,41 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
     }
   };
 
+  const fallbackCopy = (text: string) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      textArea.remove();
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2500);
+    } catch (e) {
+      console.error('Copy failed:', e);
+    }
+  };
+
   // Share progress
   const handleShareProgress = () => {
     sounds.playClick();
-    const trackLabel = learningTrack === 'ielts' ? `IELTS Band ${getEstimatedLevel().code}` : `CEFR ${getEstimatedLevel().code}`;
-    const text = `🌟 Mening LEXIS 4000 dagi natijam:\n👤 ${userProfile.full_name}\n⚡️ ${totalXp} XP | 🔥 ${streak} kunlik streak\n🎯 Daraja: ${trackLabel}\n📚 ${learnedWordsCount} ta so‘z o‘rganildi!\n👉 https://lexis.uz`;
+    const currentTrackName = learningTrack === 'ielts' ? `IELTS Band ${getEstimatedLevel().code}` : `CEFR ${getEstimatedLevel().code}`;
+    const targetTrackName = learningTrack === 'ielts' ? `IELTS ${targetLevel}` : `CEFR ${targetLevel}`;
+    const text = `🌟 Mening LEXIS 4000 dagi natijam:\n👤 ${userProfile.full_name}\n⚡️ ${totalXp} XP | 🔥 ${streak} kunlik streak\n🎯 Daraja: ${currentTrackName} (Maqsad: ${targetTrackName})\n📚 ${learnedWordsCount} ta so‘z o‘rganildi!\n👉 https://lexis4000.uz`;
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setCopiedShare(true);
-      setTimeout(() => setCopiedShare(false), 2500);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedShare(true);
+        setTimeout(() => setCopiedShare(false), 2500);
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
     }
   };
 
@@ -488,7 +592,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Ushbu darajaga yetish uchun har kuni leksika ustida davomiy shug‘ullaning
+                  Kunlik reja: <span className="font-bold text-slate-700 dark:text-slate-200">{dailyGoal} ta so‘z</span> ({dailyGoal} XP/kun)
                 </p>
               </div>
 
@@ -745,8 +849,18 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
       </main>
 
       {/* 3. Footer */}
-      <footer className="w-full py-4 border-t border-slate-200/70 dark:border-slate-800/70 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-        <p>lexis.uz • 2026</p>
+      <footer className="w-full py-4 sm:py-5 border-t border-slate-200/70 dark:border-slate-800/70 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+        <p className="flex items-center justify-center gap-1">
+          <span>made by</span>
+          <a
+            href="https://t.me/alem_42"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-2"
+          >
+            alem
+          </a>
+        </p>
       </footer>
 
       {/* 3D Avatar Picker Modal */}
@@ -895,6 +1009,34 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                       </button>
                     ))
                   )}
+                </div>
+              </div>
+
+              {/* Daily Goal Preference */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Kunlik maqsad (So‘zlar / XP)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { val: '10', label: '10 ta so‘z', sub: 'Oson (10 XP)' },
+                    { val: '20', label: '20 ta so‘z', sub: 'Standart (20 XP)' },
+                    { val: '40', label: '40 ta so‘z', sub: 'Intensiv (40 XP)' }
+                  ].map((item) => (
+                    <button
+                      key={item.val}
+                      type="button"
+                      onClick={() => setEditDaily(item.val)}
+                      className={`p-2 rounded-xl text-center border transition cursor-pointer ${
+                        editDaily === item.val
+                          ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
+                          : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                      }`}
+                    >
+                      <span className="block text-xs">{item.label}</span>
+                      <span className="block text-[10px] text-slate-400">{item.sub}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 

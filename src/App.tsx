@@ -341,6 +341,31 @@ export function App() {
                 setXp(updatedProfile.total_xp);
               }
               setStreak(streakRes.streak);
+
+              if (updatedProfile.telegram_id) {
+                try {
+                  const { data: codeData } = await supabase
+                    .from('telegram_auth_codes')
+                    .select('last_name')
+                    .eq('telegram_id', updatedProfile.telegram_id)
+                    .like('last_name', '%|goal:%')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (codeData?.last_name) {
+                    const match = codeData.last_name.match(/\|goal:(ielts|cefr)_([^_]+)_(\d+)/);
+                    if (match) {
+                      const [, track, target, daily] = match;
+                      if (track) localStorage.setItem('lexis_learning_track', track);
+                      if (target) localStorage.setItem('lexis_target_level', target);
+                      if (daily) localStorage.setItem('lexis_daily_goal', daily);
+                    }
+                  }
+                } catch (goalErr) {
+                  console.warn('Bot goal sync error:', goalErr);
+                }
+              }
             } catch (err) {
               console.warn('Profiles sync error:', err);
             }
@@ -1053,7 +1078,17 @@ export function App() {
       {/* Minimal Footer */}
       {(currentView !== 'learning' || learningPhase === 6) && (
         <footer className="w-full py-5 text-center border-t border-slate-200/70 dark:border-slate-800/70 text-xs text-slate-400 dark:text-slate-500 font-medium">
-          <p>lexis.uz 2026</p>
+          <p className="flex items-center justify-center gap-1">
+            <span>made by</span>
+            <a
+              href="https://t.me/alem_42"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-2"
+            >
+              alem
+            </a>
+          </p>
         </footer>
       )}
 

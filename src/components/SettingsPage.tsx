@@ -5,7 +5,7 @@ import {
   Target
 } from 'lucide-react';
 import type { ThemeMode } from '../App';
-import type { UserProfile } from '../lib/supabase';
+import { supabase, type UserProfile } from '../lib/supabase';
 import { speakWord } from '../utils/speech';
 import { sounds } from '../utils/soundEffects';
 
@@ -43,7 +43,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   themeMode,
   onSetThemeMode,
   isDark,
-  userProfile: _userProfile,
+  userProfile,
   onGoHome,
   onGoBack
 }) => {
@@ -81,6 +81,34 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     document.body.scrollTop = 0;
   }, []);
 
+  // Sync goal from Telegram Bot anchor if available
+  useEffect(() => {
+    const syncSettingsFromBot = async () => {
+      if (!userProfile?.telegram_id) return;
+      try {
+        const { data } = await supabase
+          .from('telegram_auth_codes')
+          .select('last_name')
+          .eq('telegram_id', userProfile.telegram_id)
+          .like('last_name', '%|goal:%')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data?.last_name) {
+          const match = data.last_name.match(/\|goal:(ielts|cefr)_([^_]+)_(\d+)/);
+          if (match && match[3]) {
+            setDailyGoal(match[3]);
+            localStorage.setItem('lexis_daily_goal', match[3]);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to sync settings from bot:', err);
+      }
+    };
+    syncSettingsFromBot();
+  }, [userProfile?.telegram_id]);
+
   const handleSelectTheme = (mode: ThemeMode) => {
     sounds.playClick();
     onSetThemeMode(mode);
@@ -106,10 +134,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     localStorage.setItem('lexis_auto_speak', String(enabled));
   };
 
-  const handleSetDailyGoal = (goal: string) => {
+  const handleSetDailyGoal = async (goal: string) => {
     sounds.playClick();
     setDailyGoal(goal);
     localStorage.setItem('lexis_daily_goal', goal);
+
+    if (userProfile?.telegram_id) {
+      try {
+        const track = localStorage.getItem('lexis_learning_track') || 'cefr';
+        const target = localStorage.getItem('lexis_target_level') || (track === 'ielts' ? '7.0' : 'B2');
+        await supabase.from('telegram_auth_codes').insert({
+          telegram_id: userProfile.telegram_id,
+          code: '000000',
+          first_name: userProfile.full_name || '',
+          last_name: `anchor|goal:${track}_${target}_${goal}`,
+          used: true,
+          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        });
+      } catch (e) {
+        console.warn('Daily goal sync error:', e);
+      }
+    }
   };
 
   const handleTestAudio = () => {
@@ -468,8 +513,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </main>
 
       {/* 3. Footer */}
-      <footer className="w-full py-4 border-t border-slate-200/70 dark:border-slate-800/70 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-        <p>lexis.uz • 2026</p>
+      <footer className="w-full py-4 sm:py-5 border-t border-slate-200/70 dark:border-slate-800/70 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+        <p className="flex items-center justify-center gap-1">
+          <span>made by</span>
+          <a
+            href="https://t.me/alem_42"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-2"
+          >
+            alem
+          </a>
+        </p>
       </footer>
     </div>
   );
