@@ -3,8 +3,6 @@ import {
   LayoutDashboard,
   Users,
   KeyRound,
-  Shield,
-  ShieldCheck,
   LogOut,
   Home,
   Search,
@@ -483,19 +481,20 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
-          {/* Logo & Security Tag */}
+          {/* Official Logo & Portal Badge */}
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-3 shadow-inner">
-              <Shield className="w-7 h-7" />
+            <div className="flex justify-center items-center mb-4">
+              <img
+                src="/logo-dark.png"
+                alt="LEXIS 4000"
+                className="h-10 w-auto"
+              />
             </div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-2">
               <Lock className="w-2.5 h-2.5" />
               <span>Xavfsiz Boshqaruv Portali</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              LEXIS 4000 Admin
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400">
               Platforma administratori uchun yopiq kirish tizimi
             </p>
           </div>
@@ -604,20 +603,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         }`}
       >
         <div>
-          {/* Brand Header */}
+          {/* Official Brand Logo */}
           <div className="h-16 px-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white flex items-center justify-center font-black shadow-xs">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="font-black text-sm text-slate-900 dark:text-white tracking-tight block leading-tight">
-                  LEXIS 4000
-                </span>
-                <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-600 dark:text-emerald-400">
-                  Admin Panel
-                </span>
-              </div>
+              <img
+                src="/logo.png"
+                alt="LEXIS 4000"
+                className="h-8 w-auto dark:hidden"
+              />
+              <img
+                src="/logo-dark.png"
+                alt="LEXIS 4000"
+                className="h-8 w-auto hidden dark:block"
+              />
+              <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                Admin
+              </span>
             </div>
 
             <button
@@ -763,6 +764,20 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             >
               <Menu className="w-5 h-5" />
             </button>
+
+            {/* Mobile Brand Logo */}
+            <div className="lg:hidden flex items-center">
+              <img
+                src="/logo.png"
+                alt="LEXIS 4000"
+                className="h-7 w-auto dark:hidden"
+              />
+              <img
+                src="/logo-dark.png"
+                alt="LEXIS 4000"
+                className="h-7 w-auto hidden dark:block"
+              />
+            </div>
 
             <div>
               <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white capitalize">
