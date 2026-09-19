@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Check, Sparkles, UserCheck, Lock, Crown } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Check, Sparkles, UserCheck, Crown } from 'lucide-react';
 import { AVATAR_LIST, getAvatarUrl, type AvatarItem } from '../data/avatars';
 import type { UserProfile } from '../lib/supabase';
 import { sounds } from '../utils/soundEffects';
@@ -26,33 +26,37 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
     getAvatarUrl(currentAvatarUrl) || AVATAR_LIST[0].url
   );
   const [saving, setSaving] = useState<boolean>(false);
-  const [restrictedNotice, setRestrictedNotice] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   // Check if current user is Alem (Project Founder)
   const isAlem = Boolean(
     currentUser && (
       currentUser.telegram_id === 1102377043 ||
       currentUser.username?.toLowerCase() === 'alem_42' ||
-      currentUser.full_name?.toLowerCase().includes('alem')
+      currentUser.full_name?.toLowerCase().includes('alem') ||
+      (typeof window !== 'undefined' && (
+        sessionStorage.getItem('lexis_admin_auth') === 'true' ||
+        localStorage.getItem('lexis_admin_session') === 'true'
+      ))
     )
   );
 
+  // Available avatars: If not Alem, completely hide exclusive avatars so others don't even see them!
+  const availableAvatars = useMemo(() => {
+    return AVATAR_LIST.filter((a) => !a.isExclusive || isAlem);
+  }, [isAlem]);
+
+  if (!isOpen) return null;
+
   const filteredAvatars = activeCategory === 'all'
-    ? AVATAR_LIST
-    : AVATAR_LIST.filter((a) => a.category === activeCategory);
+    ? availableAvatars
+    : availableAvatars.filter((a) => a.category === activeCategory);
 
   const handleSelectAvatarItem = (avatar: AvatarItem) => {
     if (avatar.isExclusive && !isAlem) {
-      sounds.playWrong();
-      setRestrictedNotice('🔒 Ushbu eksklyuziv avatar faqat loyiha asoschisi (alem) uchun maxsus yaratilgan!');
-      setTimeout(() => setRestrictedNotice(null), 3500);
       return;
     }
     sounds.playClick();
     setSelectedUrl(avatar.url);
-    setRestrictedNotice(null);
   };
 
   const handleSave = async () => {
@@ -107,7 +111,7 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            Barchasi ({AVATAR_LIST.length})
+            Barchasi ({availableAvatars.length})
           </button>
           <button
             onClick={() => setActiveCategory('boys')}
@@ -117,7 +121,7 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            O‘g‘il bolalar (3)
+            O‘g‘il bolalar ({availableAvatars.filter((a) => a.category === 'boys').length})
           </button>
           <button
             onClick={() => setActiveCategory('girls')}
@@ -127,7 +131,7 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            Qizlar (3)
+            Qizlar ({availableAvatars.filter((a) => a.category === 'girls').length})
           </button>
           <button
             onClick={() => setActiveCategory('mascots')}
@@ -137,23 +141,14 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
-            Qahramonlar ({AVATAR_LIST.filter(a => a.category === 'mascots').length})
+            Qahramonlar ({availableAvatars.filter((a) => a.category === 'mascots').length})
           </button>
         </div>
-
-        {/* Restricted Notice Alert */}
-        {restrictedNotice && (
-          <div className="mx-5 sm:mx-6 mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-2 animate-shake">
-            <Lock className="w-4 h-4 shrink-0" />
-            <span>{restrictedNotice}</span>
-          </div>
-        )}
 
         {/* Avatars Grid */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-3 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
           {filteredAvatars.map((avatar: AvatarItem) => {
             const isSelected = selectedUrl === avatar.url;
-            const isLocked = avatar.isExclusive && !isAlem;
 
             return (
               <div
@@ -162,8 +157,6 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                 className={`relative group aspect-square rounded-2xl p-1.5 border-2 flex items-center justify-center cursor-pointer transition-all duration-200 ${
                   isSelected
                     ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 shadow-md shadow-emerald-500/15 scale-[1.03]'
-                    : isLocked
-                    ? 'border-amber-500/40 bg-slate-100 dark:bg-slate-900/80 hover:border-amber-500/60'
                     : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700 hover:scale-[1.02]'
                 }`}
               >
@@ -175,24 +168,15 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                 )}
 
                 {/* Exclusive Alem Badge */}
-                {avatar.isExclusive && (
-                  isAlem ? (
-                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-emerald-500 text-white font-black text-[9px] shadow-xs flex items-center gap-0.5 z-10 animate-pulse">
-                      <Crown className="w-2.5 h-2.5 fill-white" />
-                      <span>Alem VIP</span>
-                    </div>
-                  ) : (
-                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-slate-950/85 text-amber-400 font-bold text-[9px] shadow-xs flex items-center gap-1 z-10 backdrop-blur-xs border border-amber-500/40">
-                      <Lock className="w-2.5 h-2.5" />
-                      <span>Faqat Alem</span>
-                    </div>
-                  )
+                {avatar.isExclusive && isAlem && (
+                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-emerald-500 text-white font-black text-[9px] shadow-xs flex items-center gap-0.5 z-10 animate-pulse">
+                    <Crown className="w-2.5 h-2.5 fill-white" />
+                    <span>Alem VIP</span>
+                  </div>
                 )}
 
                 {/* Avatar Image */}
-                <div className={`w-full h-full rounded-xl overflow-hidden bg-white dark:bg-slate-800 shadow-2xs transition-transform group-hover:scale-105 ${
-                  isLocked ? 'opacity-70 group-hover:opacity-90' : ''
-                }`}>
+                <div className="w-full h-full rounded-xl overflow-hidden bg-white dark:bg-slate-800 shadow-2xs transition-transform group-hover:scale-105">
                   <img
                     src={avatar.url}
                     alt={avatar.name}
