@@ -4,93 +4,168 @@ export interface AvatarItem {
   category: 'boys' | 'girls' | 'mascots';
   categoryLabel: string;
   url: string;
-  isExclusive?: boolean;
+  requiredXp: number; // 0 = Free, 50 = Premium, 100 = Legendary Premium
+  tier?: 'free' | 'premium' | 'legendary';
 }
 
 export const AVATAR_LIST: AvatarItem[] = [
-  // Exclusive Creator Avatar for Alem
-  {
-    id: 'alem-creator',
-    name: 'Alem (VIP Creator)',
-    category: 'mascots',
-    categoryLabel: 'VIP Asoschi',
-    url: '/avatars/alem-creator.jpg',
-    isExclusive: true
-  },
-  // Boys
+  // --- BOYS ---
   {
     id: 'boy-1',
-    name: 'Scholar Boy',
+    name: 'Bilimdon Yigit',
     category: 'boys',
-    categoryLabel: 'Boys',
-    url: '/avatars/boy-1.jpg'
+    categoryLabel: 'O‘g‘il bolalar',
+    url: '/avatars/boy-1.jpg',
+    requiredXp: 0,
+    tier: 'free'
   },
   {
     id: 'boy-2',
-    name: 'Smart Boy',
+    name: 'Zukko Yigit',
     category: 'boys',
-    categoryLabel: 'Boys',
-    url: '/avatars/boy-2.jpg'
+    categoryLabel: 'O‘g‘il bolalar',
+    url: '/avatars/boy-2.jpg',
+    requiredXp: 0,
+    tier: 'free'
   },
   {
     id: 'boy-3',
     name: 'Gentleman',
     category: 'boys',
-    categoryLabel: 'Boys',
-    url: '/avatars/boy-3.jpg'
+    categoryLabel: 'O‘g‘il bolalar',
+    url: '/avatars/boy-3.jpg',
+    requiredXp: 0,
+    tier: 'free'
+  },
+  {
+    id: 'super-boy',
+    name: 'Super Qahramon',
+    category: 'boys',
+    categoryLabel: 'O‘g‘il bolalar',
+    url: '/avatars/super-boy.jpg',
+    requiredXp: 100,
+    tier: 'legendary'
   },
 
-  // Girls
+  // --- GIRLS ---
   {
     id: 'girl-1',
-    name: 'Smart Girl',
+    name: 'Zukko Qiz',
     category: 'girls',
-    categoryLabel: 'Girls',
-    url: '/avatars/girl-1.jpg'
+    categoryLabel: 'Qizlar',
+    url: '/avatars/girl-1.jpg',
+    requiredXp: 0,
+    tier: 'free'
   },
   {
     id: 'girl-2',
-    name: 'Joyful Girl',
+    name: 'Quvnoq Qiz',
     category: 'girls',
-    categoryLabel: 'Girls',
-    url: '/avatars/girl-2.jpg'
+    categoryLabel: 'Qizlar',
+    url: '/avatars/girl-2.jpg',
+    requiredXp: 0,
+    tier: 'free'
   },
   {
     id: 'girl-3',
-    name: 'Grace Girl',
+    name: 'Nafis Qiz',
     category: 'girls',
-    categoryLabel: 'Girls',
-    url: '/avatars/girl-3.jpg'
+    categoryLabel: 'Qizlar',
+    url: '/avatars/girl-3.jpg',
+    requiredXp: 0,
+    tier: 'free'
+  },
+  {
+    id: 'wizard-girl',
+    name: 'Sehrgar Qiz',
+    category: 'girls',
+    categoryLabel: 'Qizlar',
+    url: '/avatars/wizard-girl.jpg',
+    requiredXp: 50,
+    tier: 'premium'
   },
 
-  // Mascots
+  // --- MASCOTS & LEGENDS ---
+  {
+    id: 'fox',
+    name: 'Ziyrak Tulki',
+    category: 'mascots',
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/fox.jpg',
+    requiredXp: 0,
+    tier: 'free'
+  },
   {
     id: 'owl',
-    name: 'Wise Owl',
+    name: 'Dono Boyo‘g‘li',
     category: 'mascots',
-    categoryLabel: 'Mascots',
-    url: '/avatars/owl.jpg'
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/owl.jpg',
+    requiredXp: 0,
+    tier: 'free'
   },
   {
     id: 'robot',
-    name: 'Cyber Robot',
+    name: 'Kiber Robot',
     category: 'mascots',
-    categoryLabel: 'Mascots',
-    url: '/avatars/robot.jpg'
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/robot.jpg',
+    requiredXp: 50,
+    tier: 'premium'
   },
   {
-    id: 'fox',
-    name: 'Clever Fox',
+    id: 'ninja-cat',
+    name: 'Ninja Mushuk',
     category: 'mascots',
-    categoryLabel: 'Mascots',
-    url: '/avatars/fox.jpg'
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/ninja-cat.jpg',
+    requiredXp: 50,
+    tier: 'premium'
   },
   {
     id: 'astronaut',
-    name: 'Cosmo Explorer',
+    name: 'Koinot Sayyohi',
     category: 'mascots',
-    categoryLabel: 'Mascots',
-    url: '/avatars/astronaut.jpg'
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/astronaut.jpg',
+    requiredXp: 50,
+    tier: 'premium'
+  },
+  {
+    id: 'cyber-bear',
+    name: 'Geymer Oq Ayiq',
+    category: 'mascots',
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/cyber-bear.jpg',
+    requiredXp: 50,
+    tier: 'premium'
+  },
+  {
+    id: 'cosmic-kitty',
+    name: 'Yulduzli Mushukcha',
+    category: 'mascots',
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/cosmic-kitty.jpg',
+    requiredXp: 100,
+    tier: 'legendary'
+  },
+  {
+    id: 'baby-dragon',
+    name: 'Kichik Ajdarho',
+    category: 'mascots',
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/baby-dragon.jpg',
+    requiredXp: 100,
+    tier: 'legendary'
+  },
+  {
+    id: 'lion-king',
+    name: 'Qirol Sher',
+    category: 'mascots',
+    categoryLabel: 'Qahramonlar',
+    url: '/avatars/lion-king.jpg',
+    requiredXp: 100,
+    tier: 'legendary'
   }
 ];
 
