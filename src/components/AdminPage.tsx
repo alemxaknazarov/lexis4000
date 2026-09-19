@@ -28,9 +28,15 @@ import {
   TrendingUp,
   Award,
   Trash2,
-  Loader2
+  Loader2,
+  Megaphone,
+  Send,
+  BookOpen,
+  Edit3,
+  Save,
+  Volume2
 } from 'lucide-react';
-import { supabase, type UserProfile } from '../lib/supabase';
+import { supabase, type UserProfile, type Word } from '../lib/supabase';
 import { sounds } from '../utils/soundEffects';
 
 interface AdminPageProps {
@@ -62,7 +68,7 @@ interface AuthCodeRecord {
   created_at: string;
 }
 
-type AdminTab = 'dashboard' | 'users' | 'progress' | 'codes' | 'security';
+type AdminTab = 'dashboard' | 'users' | 'broadcast' | 'dictionary' | 'progress' | 'codes' | 'security';
 type UserFilter = 'all' | 'has_phone' | 'active' | 'new';
 type UserSort = 'created_desc' | 'xp_desc' | 'streak_desc' | 'name_asc';
 
@@ -116,6 +122,28 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [deleteError, setDeleteError] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [deleteToast, setDeleteToast] = useState<string | null>(null);
+
+  // Broadcast State
+  const [broadcastTitle, setBroadcastTitle] = useState('📢 LEXIS 4000 dan yangilik!');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastButtonText, setBroadcastButtonText] = useState('🌐 Saytga kirish');
+  const [broadcastButtonUrl, setBroadcastButtonUrl] = useState('https://lexis4000.uz');
+  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'test_alem' | 'active_streak'>('test_alem');
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ ok: boolean; message: string; count?: number } | null>(null);
+
+  // Dictionary Tab State
+  const [dictSearch, setDictSearch] = useState('');
+  const [selectedBook, setSelectedBook] = useState<number>(1);
+  const [dictionaryWords, setDictionaryWords] = useState<Word[]>([]);
+  const [loadingDictionary, setLoadingDictionary] = useState(false);
+  const [playingWordAudio, setPlayingWordAudio] = useState<string | null>(null);
+
+  // User Score (XP & Streak) Editing State
+  const [isEditingScores, setIsEditingScores] = useState(false);
+  const [editXpInput, setEditXpInput] = useState<number>(0);
+  const [editStreakInput, setEditStreakInput] = useState<number>(0);
+  const [isSavingScores, setIsSavingScores] = useState(false);
 
   // Password Change State
   const [currentPwd, setCurrentPwd] = useState('');
@@ -364,6 +392,166 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     }
   };
 
+  // Sync user scores when selectedUser is opened
+  useEffect(() => {
+    if (selectedUser) {
+      setEditXpInput(selectedUser.total_xp || 0);
+      setEditStreakInput(selectedUser.streak_days || 0);
+      setIsEditingScores(false);
+    }
+  }, [selectedUser]);
+
+  // Handle Save User Scores (XP & Streak)
+  const handleSaveScores = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedUser) return;
+    setIsSavingScores(true);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          total_xp: Number(editXpInput),
+          streak_days: Number(editStreakInput)
+        })
+        .eq('id', selectedUser.id);
+
+      if (error) throw error;
+
+      sounds.playCorrect();
+      setProfiles((prev) =>
+        prev.map((p) =>
+          p.id === selectedUser.id
+            ? { ...p, total_xp: Number(editXpInput), streak_days: Number(editStreakInput) }
+            : p
+        )
+      );
+      setSelectedUser((prev) =>
+        prev
+          ? { ...prev, total_xp: Number(editXpInput), streak_days: Number(editStreakInput) }
+          : null
+      );
+      setIsEditingScores(false);
+      setDeleteToast(`"${selectedUser.full_name}" ko‘rsatkichlari muvaffaqiyatli saqlandi!`);
+      setTimeout(() => setDeleteToast(null), 3500);
+    } catch (err: any) {
+      sounds.playWrong();
+      alert('Xatolik: ' + (err.message || 'Saqlab bo‘lmadi'));
+    } finally {
+      setIsSavingScores(false);
+    }
+  };
+
+  // Handle Load Dictionary Book
+  const loadDictionaryBook = async (bookNum: number) => {
+    setLoadingDictionary(true);
+    setSelectedBook(bookNum);
+    try {
+      let mod: any;
+      if (bookNum === 1) mod = await import('../data/book1Words');
+      else if (bookNum === 2) mod = await import('../data/book2Words');
+      else if (bookNum === 3) mod = await import('../data/book3Words');
+      else if (bookNum === 4) mod = await import('../data/book4Words');
+      else if (bookNum === 5) mod = await import('../data/book5Words');
+      else mod = await import('../data/book6Words');
+
+      const wordsArray = mod[`book${bookNum}Words`] || [];
+      setDictionaryWords(wordsArray);
+    } catch (err) {
+      console.error('Failed to load book words:', err);
+    } finally {
+      setLoadingDictionary(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'dictionary' && dictionaryWords.length === 0) {
+      loadDictionaryBook(1);
+    }
+  }, [activeTab]);
+
+  // Handle Play Word Audio
+  const handlePlayAudio = (url: string, word: string) => {
+    setPlayingWordAudio(word);
+    sounds.playClick();
+    if (url) {
+      const audio = new Audio(url);
+      audio.play().catch(() => {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(word);
+          utterance.lang = 'en-US';
+          window.speechSynthesis.speak(utterance);
+        }
+      });
+      audio.onended = () => setPlayingWordAudio(null);
+      audio.onerror = () => setPlayingWordAudio(null);
+    } else if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.onend = () => setPlayingWordAudio(null);
+      utterance.onerror = () => setPlayingWordAudio(null);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Handle Send Telegram Broadcast
+  const handleSendBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastMessage.trim()) {
+      alert('Iltimos, xabar matnini kiriting');
+      return;
+    }
+
+    setIsSendingBroadcast(true);
+    setBroadcastResult(null);
+
+    try {
+      const endpoints = ['/api/admin-broadcast', 'https://www.lexis4000.uz/api/admin-broadcast'];
+      let resData: any = null;
+      let ok = false;
+
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: broadcastTitle,
+              message: broadcastMessage,
+              button_text: broadcastButtonText,
+              button_url: broadcastButtonUrl,
+              target_type: broadcastTarget
+            })
+          });
+          if (res.ok) {
+            resData = await res.json();
+            ok = true;
+            break;
+          }
+        } catch (_) {}
+      }
+
+      if (ok && resData && resData.ok) {
+        sounds.playCorrect();
+        setBroadcastResult({
+          ok: true,
+          message: `Xabarnoma yuborildi! (Yetkazildi: ${resData.sent_count} ta, Xatolik: ${resData.failed_count} ta)`,
+          count: resData.sent_count
+        });
+      } else {
+        throw new Error(resData?.error || 'Xabar yuborishda xatolik yuz berdi');
+      }
+    } catch (err: any) {
+      sounds.playWrong();
+      setBroadcastResult({
+        ok: false,
+        message: err.message || 'Xabar yuborishda xatolik yuz berdi'
+      });
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
+
   // Copy to clipboard helper
   const handleCopy = (text: string) => {
     if (!text) return;
@@ -470,6 +658,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
     return list;
   }, [profiles, searchQuery, userFilter, userSort]);
+
+  // Filtered Dictionary Words
+  const filteredDictWords = useMemo(() => {
+    if (!dictSearch.trim()) return dictionaryWords.slice(0, 80);
+    const q = dictSearch.toLowerCase().trim();
+    return dictionaryWords.filter(
+      (w) =>
+        w.word.toLowerCase().includes(q) ||
+        (w.translation_uz && w.translation_uz.toLowerCase().includes(q))
+    ).slice(0, 80);
+  }, [dictionaryWords, dictSearch]);
 
   // ==========================================
   // VIEW 1: ADMIN LOGIN SCREEN
@@ -668,6 +867,36 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
             <button
               onClick={() => {
+                setActiveTab('broadcast');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                activeTab === 'broadcast'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+            >
+              <Megaphone className="w-4 h-4" />
+              <span>Xabarnoma (Broadcast)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('dictionary');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                activeTab === 'dictionary'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Lug‘at (4000 so‘z)</span>
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTab('progress');
                 setMobileMenuOpen(false);
               }}
@@ -783,6 +1012,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-white capitalize">
                 {activeTab === 'dashboard' && 'Boshqaruv Paneli (Overview)'}
                 {activeTab === 'users' && 'Foydalanuvchilar Bazasi'}
+                {activeTab === 'broadcast' && 'Telegram Xabarnoma (Broadcast Markazi)'}
+                {activeTab === 'dictionary' && 'Lug‘at Boshqaruvi (4000 ta so‘z)'}
                 {activeTab === 'progress' && 'Unitlar va O‘rganish Faolligi'}
                 {activeTab === 'codes' && 'Telegram Kirish Kodlari Jurnali'}
                 {activeTab === 'security' && 'Admin Xavfsizlik Sozlamalari'}
@@ -1286,7 +1517,304 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           )}
 
           {/* ==========================================
-              TAB 3: UNIT PROGRESS MONITORING
+              TAB 3: TELEGRAM BROADCAST CENTER
+              ========================================== */}
+          {activeTab === 'broadcast' && (
+            <div className="space-y-6 animate-fadeIn max-w-4xl">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-5 sm:p-6 shadow-xs">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Megaphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Telegram Bot orqali ommaviy xabarnoma yuborish
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      O‘quvchilarga yangiliklar, dars eslatmalari yoki motivatsion xabarlar yuboring
+                    </p>
+                  </div>
+                </div>
+
+                {/* Target Audience Selector */}
+                <div className="mt-5 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800/80 space-y-3">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Kimlarga yuborilsin?
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastTarget('test_alem')}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                        broadcastTarget === 'test_alem'
+                          ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">🧪 Test Rejim (Alem)</span>
+                        {broadcastTarget === 'test_alem' && <Check className="w-4 h-4 text-amber-500" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Faqat sizning Telegramingizga (@alem_42) test xabari boradi
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastTarget('all')}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                        broadcastTarget === 'all'
+                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">🌐 Barcha O‘quvchilarga</span>
+                        {broadcastTarget === 'all' && <Check className="w-4 h-4 text-emerald-500" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Bazadagi barcha Telegram ulangan ({profiles.filter(p => Boolean(p.telegram_id)).length} ta) o‘quvchilarga
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastTarget('active_streak')}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                        broadcastTarget === 'active_streak'
+                          ? 'border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">🔥 Faol O‘quvchilarga</span>
+                        {broadcastTarget === 'active_streak' && <Check className="w-4 h-4 text-rose-500" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Ketma-ket dars qilayotgan ({profiles.filter(p => (p.streak_days || 0) > 0).length} ta) o‘quvchilarga
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Broadcast Form */}
+                <form onSubmit={handleSendBroadcast} className="mt-5 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Xabar sarlavhasi (Ixtiyoriy)
+                    </label>
+                    <input
+                      type="text"
+                      value={broadcastTitle}
+                      onChange={(e) => setBroadcastTitle(e.target.value)}
+                      placeholder="masalan: 🚀 LEXIS 4000 da yangi imkoniyatlar!"
+                      className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-emerald-500 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Xabar matni (HTML teglari qo‘llab-quvvatlanadi: &lt;b&gt;, &lt;i&gt;) *
+                    </label>
+                    <textarea
+                      rows={5}
+                      required
+                      value={broadcastMessage}
+                      onChange={(e) => setBroadcastMessage(e.target.value)}
+                      placeholder="Assalomu alaykum! Bugungi kunlik so‘z mashqlarini bajarishni unutmang. Har kuni 20 ta so‘z sizni C1 darajasiga yetaklaydi..."
+                      className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-emerald-500 transition"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Inline Tugma Matni (Ixtiyoriy)
+                      </label>
+                      <input
+                        type="text"
+                        value={broadcastButtonText}
+                        onChange={(e) => setBroadcastButtonText(e.target.value)}
+                        placeholder="masalan: 🌐 Saytga kirish"
+                        className="w-full px-3.5 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-emerald-500 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Tugma Havolasi (URL)
+                      </label>
+                      <input
+                        type="url"
+                        value={broadcastButtonUrl}
+                        onChange={(e) => setBroadcastButtonUrl(e.target.value)}
+                        placeholder="https://lexis4000.uz"
+                        className="w-full px-3.5 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-emerald-500 transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Result status alert */}
+                  {broadcastResult && (
+                    <div className={`p-3.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                      broadcastResult.ok
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                    }`}>
+                      {broadcastResult.ok ? <Check className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
+                      <span>{broadcastResult.message}</span>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSendingBroadcast || !broadcastMessage.trim()}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 transition cursor-pointer disabled:opacity-50 active:scale-95"
+                    >
+                      {isSendingBroadcast ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Yuborilmoqda...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>
+                            {broadcastTarget === 'test_alem' ? 'Test xabarni yuborish' : 'Xabarnomani tarqatish'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ==========================================
+              TAB 4: DICTIONARY EXPLORER (4000 WORDS)
+              ========================================== */}
+          {activeTab === 'dictionary' && (
+            <div className="space-y-4 animate-fadeIn">
+              {/* Toolbar */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-4 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  {/* Search */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={dictSearch}
+                      onChange={(e) => setDictSearch(e.target.value)}
+                      placeholder="Inglizcha yoki o‘zbekcha so‘z qidirish..."
+                      className="w-full pl-9 pr-4 py-2 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-emerald-500 transition"
+                    />
+                    {dictSearch && (
+                      <button
+                        onClick={() => setDictSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Book Selector Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    {[1, 2, 3, 4, 5, 6].map((bNum) => (
+                      <button
+                        key={bNum}
+                        onClick={() => loadDictionaryBook(bNum)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                          selectedBook === bNum
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        Kitob {bNum}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Words Table */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-2xl shadow-xs overflow-hidden">
+                {loadingDictionary ? (
+                  <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                    <span className="text-xs">Kitob so‘zlari yuklanmoqda...</span>
+                  </div>
+                ) : filteredDictWords.length === 0 ? (
+                  <div className="py-16 text-center text-slate-400 text-xs">
+                    Hech qanday so‘z topilmadi
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200/80 dark:border-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4">So‘z & Talaffuz</th>
+                          <th className="py-3 px-4">Turkumi</th>
+                          <th className="py-3 px-4">O‘zbekcha Tarjima</th>
+                          <th className="py-3 px-4">Inglizcha Ta’rif</th>
+                          <th className="py-3 px-4">Unit</th>
+                          <th className="py-3 px-4 text-right">Ovoz</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {filteredDictWords.map((w) => (
+                          <tr key={w.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                            <td className="py-3 px-4">
+                              <span className="font-bold text-slate-900 dark:text-white block text-sm">
+                                {w.word}
+                              </span>
+                              <span className="font-mono text-[11px] text-slate-400">
+                                {w.phonetic || '-'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-slate-500 text-[11px]">
+                              {w.part_of_speech || '-'}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-emerald-600 dark:text-emerald-400">
+                              {w.translation_uz || '-'}
+                            </td>
+                            <td className="py-3 px-4 text-slate-600 dark:text-slate-300 max-w-xs truncate" title={w.definition_en}>
+                              {w.definition_en}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-slate-400 text-[11px]">
+                              B{w.book_number}-U{w.unit_number}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                onClick={() => handlePlayAudio(w.audio_url, w.word)}
+                                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                  playingWordAudio === w.word
+                                    ? 'bg-emerald-500 text-white scale-110'
+                                    : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                                }`}
+                                title="Talaffuzni eshitish"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="p-3 bg-slate-50/70 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/60 text-xs text-slate-400 text-center">
+                  Ko‘rsatilmoqda: <span className="font-bold text-slate-700 dark:text-slate-200">{filteredDictWords.length}</span> ta so‘z (Kitob {selectedBook})
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==========================================
+              TAB 5: UNIT PROGRESS MONITORING
               ========================================== */}
           {activeTab === 'progress' && (
             <div className="space-y-4 animate-fadeIn">
@@ -1620,20 +2148,137 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 )}
               </div>
 
-              {/* XP and Streak */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80">
-                  <span className="text-[10px] text-slate-400 font-medium block">Jami XP:</span>
-                  <span className="text-sm font-black text-amber-600 dark:text-amber-400 font-mono">
-                    ⚡️ {selectedUser.total_xp || 0} XP
+              {/* XP and Streak Section (With Edit capabilities) */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Natijalar (XP & Streak)</span>
                   </span>
+                  {!isEditingScores ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingScores(true)}
+                      className="px-2 py-1 rounded-lg text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/60 dark:border-emerald-800/60 transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Tahrirlash</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingScores(false);
+                        setEditXpInput(selectedUser.total_xp || 0);
+                        setEditStreakInput(selectedUser.streak_days || 0);
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                    >
+                      Bekor qilish
+                    </button>
+                  )}
                 </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80">
-                  <span className="text-[10px] text-slate-400 font-medium block">Ketma-ketlik:</span>
-                  <span className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono">
-                    🔥 {selectedUser.streak_days || 0} kun
-                  </span>
-                </div>
+
+                {!isEditingScores ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-medium block">Jami XP:</span>
+                      <span className="text-sm font-black text-amber-600 dark:text-amber-400 font-mono">
+                        ⚡️ {selectedUser.total_xp || 0} XP
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-medium block">Ketma-ketlik:</span>
+                      <span className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono">
+                        🔥 {selectedUser.streak_days || 0} kun
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveScores} className="space-y-3 pt-1">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                          XP Ballari:
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditXpInput((v) => Number(v) + 50)}
+                            className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-200 cursor-pointer"
+                          >
+                            +50
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditXpInput((v) => Number(v) + 100)}
+                            className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-200 cursor-pointer"
+                          >
+                            +100
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditXpInput((v) => Number(v) + 500)}
+                            className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-200 cursor-pointer"
+                          >
+                            +500
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editXpInput}
+                        onChange={(e) => setEditXpInput(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full px-3 py-1.5 text-sm font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                          Ketma-ketlik (Streak kunlari):
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditStreakInput((v) => Number(v) + 1)}
+                            className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-200 cursor-pointer"
+                          >
+                            +1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditStreakInput((v) => Number(v) + 7)}
+                            className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-200 cursor-pointer"
+                          >
+                            +7
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editStreakInput}
+                        onChange={(e) => setEditStreakInput(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full px-3 py-1.5 text-sm font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingScores}
+                      className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingScores ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isSavingScores ? 'Saqlanmoqda...' : 'Ko‘rsatkichlarni saqlash'}</span>
+                    </button>
+                  </form>
+                )}
               </div>
 
               {/* Completed Units */}
