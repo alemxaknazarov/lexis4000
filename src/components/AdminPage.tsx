@@ -34,7 +34,8 @@ import {
   BookOpen,
   Edit3,
   Save,
-  Volume2
+  Volume2,
+  User
 } from 'lucide-react';
 import { supabase, type UserProfile, type Word } from '../lib/supabase';
 import { sounds } from '../utils/soundEffects';
@@ -128,14 +129,28 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastButtonText, setBroadcastButtonText] = useState('🌐 Saytga kirish');
   const [broadcastButtonUrl, setBroadcastButtonUrl] = useState('https://lexis4000.uz');
-  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'test_alem' | 'active_streak'>('test_alem');
+  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'test_alem' | 'active_streak' | 'single'>('test_alem');
+  const [selectedTargetUser, setSelectedTargetUser] = useState<UserProfile | null>(null);
+  const [broadcastUserSearch, setBroadcastUserSearch] = useState('');
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ ok: boolean; message: string; count?: number } | null>(null);
+
+  // Direct Message Modal State (for 1-on-1 messaging)
+  const [directMessageUser, setDirectMessageUser] = useState<UserProfile | null>(null);
+  const [directMessageTitle, setDirectMessageTitle] = useState('');
+  const [directMessageBody, setDirectMessageBody] = useState('');
+  const [directMessageButtonText, setDirectMessageButtonText] = useState('🌐 Saytga kirish');
+  const [directMessageButtonUrl, setDirectMessageButtonUrl] = useState('https://lexis4000.uz');
+  const [directMessageCustomChatId, setDirectMessageCustomChatId] = useState('');
+  const [isSendingDirectMessage, setIsSendingDirectMessage] = useState(false);
+  const [directMessageResult, setDirectMessageResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   // Dictionary Tab State
   const [dictSearch, setDictSearch] = useState('');
   const [selectedBook, setSelectedBook] = useState<number>(1);
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState<number>(0);
   const [dictionaryWords, setDictionaryWords] = useState<Word[]>([]);
+  const [dictVisibleCount, setDictVisibleCount] = useState<number>(60);
   const [loadingDictionary, setLoadingDictionary] = useState(false);
   const [playingWordAudio, setPlayingWordAudio] = useState<string | null>(null);
 
@@ -446,17 +461,40 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const loadDictionaryBook = async (bookNum: number) => {
     setLoadingDictionary(true);
     setSelectedBook(bookNum);
+    setSelectedUnitFilter(0);
+    setDictVisibleCount(60);
     try {
-      let mod: any;
-      if (bookNum === 1) mod = await import('../data/book1Words');
-      else if (bookNum === 2) mod = await import('../data/book2Words');
-      else if (bookNum === 3) mod = await import('../data/book3Words');
-      else if (bookNum === 4) mod = await import('../data/book4Words');
-      else if (bookNum === 5) mod = await import('../data/book5Words');
-      else mod = await import('../data/book6Words');
+      if (bookNum === 0) {
+        // Load all 6 books concurrently
+        const [m1, m2, m3, m4, m5, m6] = await Promise.all([
+          import('../data/book1Words'),
+          import('../data/book2Words'),
+          import('../data/book3Words'),
+          import('../data/book4Words'),
+          import('../data/book5Words'),
+          import('../data/book6Words')
+        ]);
+        const allWords = [
+          ...(m1.BOOK_1_WORDS || []),
+          ...(m2.BOOK_2_WORDS || []),
+          ...(m3.BOOK_3_WORDS || []),
+          ...(m4.BOOK_4_WORDS || []),
+          ...(m5.BOOK_5_WORDS || []),
+          ...(m6.BOOK_6_WORDS || [])
+        ];
+        setDictionaryWords(allWords);
+      } else {
+        let mod: any;
+        if (bookNum === 1) mod = await import('../data/book1Words');
+        else if (bookNum === 2) mod = await import('../data/book2Words');
+        else if (bookNum === 3) mod = await import('../data/book3Words');
+        else if (bookNum === 4) mod = await import('../data/book4Words');
+        else if (bookNum === 5) mod = await import('../data/book5Words');
+        else mod = await import('../data/book6Words');
 
-      const wordsArray = mod[`book${bookNum}Words`] || [];
-      setDictionaryWords(wordsArray);
+        const wordsArray = mod[`BOOK_${bookNum}_WORDS`] || mod[`book${bookNum}Words`] || [];
+        setDictionaryWords(wordsArray);
+      }
     } catch (err) {
       console.error('Failed to load book words:', err);
     } finally {
@@ -502,6 +540,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       return;
     }
 
+    if (broadcastTarget === 'single') {
+      if (!selectedTargetUser) {
+        alert('Iltimos, xabar yuborish uchun foydalanuvchini tanlang');
+        return;
+      }
+      if (!selectedTargetUser.telegram_id) {
+        alert(`"${selectedTargetUser.full_name}" da Telegram ID ulanmagan.`);
+        return;
+      }
+    }
+
     setIsSendingBroadcast(true);
     setBroadcastResult(null);
 
@@ -510,32 +559,50 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       let resData: any = null;
       let ok = false;
 
+      const payload: any = {
+        title: broadcastTitle,
+        message: broadcastMessage,
+        button_text: broadcastButtonText,
+        button_url: broadcastButtonUrl,
+        target_type: broadcastTarget
+      };
+
+      if (broadcastTarget === 'single' && selectedTargetUser?.telegram_id) {
+        payload.target_chat_id = selectedTargetUser.telegram_id;
+      }
+
       for (const ep of endpoints) {
         try {
           const res = await fetch(ep, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: broadcastTitle,
-              message: broadcastMessage,
-              button_text: broadcastButtonText,
-              button_url: broadcastButtonUrl,
-              target_type: broadcastTarget
-            })
+            body: JSON.stringify(payload)
           });
           if (res.ok) {
             resData = await res.json();
             ok = true;
             break;
+          } else {
+            const errData = await res.json().catch(() => null);
+            if (errData?.error) {
+              throw new Error(errData.error);
+            }
           }
-        } catch (_) {}
+        } catch (err: any) {
+          if (err.message && err.message !== 'Failed to fetch') {
+            throw err;
+          }
+        }
       }
 
       if (ok && resData && resData.ok) {
         sounds.playCorrect();
+        const recipientText = broadcastTarget === 'single' && selectedTargetUser
+          ? `"${selectedTargetUser.full_name}" ga`
+          : `${resData.sent_count} ta foydalanuvchiga`;
         setBroadcastResult({
           ok: true,
-          message: `Xabarnoma yuborildi! (Yetkazildi: ${resData.sent_count} ta, Xatolik: ${resData.failed_count} ta)`,
+          message: `Xabarnoma muvaffaqiyatli yuborildi! (${recipientText})`,
           count: resData.sent_count
         });
       } else {
@@ -549,6 +616,85 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       });
     } finally {
       setIsSendingBroadcast(false);
+    }
+  };
+
+  // Handle Send Direct Telegram Message to 1 User
+  const handleSendDirectMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!directMessageUser) return;
+
+    const chatId = directMessageUser.telegram_id || (directMessageCustomChatId ? Number(directMessageCustomChatId) : null);
+    if (!chatId) {
+      alert('Foydalanuvchida Telegram ID yo‘q. Iltimos, Telegram Chat ID kiriting.');
+      return;
+    }
+
+    if (!directMessageBody.trim()) {
+      alert('Iltimos, xabar matnini kiriting.');
+      return;
+    }
+
+    setIsSendingDirectMessage(true);
+    setDirectMessageResult(null);
+
+    try {
+      const endpoints = ['/api/admin-broadcast', 'https://www.lexis4000.uz/api/admin-broadcast'];
+      let resData: any = null;
+      let ok = false;
+
+      const payload = {
+        title: directMessageTitle,
+        message: directMessageBody,
+        button_text: directMessageButtonText,
+        button_url: directMessageButtonUrl,
+        target_type: 'single',
+        target_chat_id: chatId
+      };
+
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            resData = await res.json();
+            ok = true;
+            break;
+          } else {
+            const errData = await res.json().catch(() => null);
+            if (errData?.error) {
+              throw new Error(errData.error);
+            }
+          }
+        } catch (err: any) {
+          if (err.message && err.message !== 'Failed to fetch') {
+            throw err;
+          }
+        }
+      }
+
+      if (ok && resData && resData.ok) {
+        sounds.playCorrect();
+        setDirectMessageResult({
+          ok: true,
+          message: `Xabar "${directMessageUser.full_name}" ga yetkazildi!`
+        });
+        setDeleteToast(`"${directMessageUser.full_name}" ga Telegram xabar yetkazildi!`);
+        setTimeout(() => setDeleteToast(null), 4000);
+      } else {
+        throw new Error(resData?.error || 'Xabar yuborilmadi');
+      }
+    } catch (err: any) {
+      sounds.playWrong();
+      setDirectMessageResult({
+        ok: false,
+        message: err.message || 'Xatolik yuz berdi'
+      });
+    } finally {
+      setIsSendingDirectMessage(false);
     }
   };
 
@@ -661,14 +807,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
   // Filtered Dictionary Words
   const filteredDictWords = useMemo(() => {
-    if (!dictSearch.trim()) return dictionaryWords.slice(0, 80);
-    const q = dictSearch.toLowerCase().trim();
-    return dictionaryWords.filter(
-      (w) =>
-        w.word.toLowerCase().includes(q) ||
-        (w.translation_uz && w.translation_uz.toLowerCase().includes(q))
-    ).slice(0, 80);
-  }, [dictionaryWords, dictSearch]);
+    let list = dictionaryWords;
+    if (selectedUnitFilter > 0) {
+      list = list.filter((w) => w.unit_number === selectedUnitFilter);
+    }
+    if (dictSearch.trim()) {
+      const q = dictSearch.toLowerCase().trim();
+      list = list.filter(
+        (w) =>
+          (w.word && w.word.toLowerCase().includes(q)) ||
+          (w.translation_uz && w.translation_uz.toLowerCase().includes(q)) ||
+          (w.definition_en && w.definition_en.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [dictionaryWords, dictSearch, selectedUnitFilter]);
 
   // ==========================================
   // VIEW 1: ADMIN LOGIN SCREEN
@@ -1483,6 +1636,21 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                             <td className="py-3 px-4 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
+                                  onClick={() => {
+                                    setDirectMessageUser(user);
+                                    setDirectMessageTitle('');
+                                    setDirectMessageBody('');
+                                    setDirectMessageButtonText('🌐 Saytga kirish');
+                                    setDirectMessageButtonUrl('https://lexis4000.uz');
+                                    setDirectMessageCustomChatId(user.telegram_id ? String(user.telegram_id) : '');
+                                    setDirectMessageResult(null);
+                                  }}
+                                  title="Telegramdan xabar yuborish"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition cursor-pointer"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                </button>
+                                <button
                                   onClick={() => setSelectedUser(user)}
                                   className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
                                 >
@@ -1541,7 +1709,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                     Kimlarga yuborilsin?
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setBroadcastTarget('test_alem')}
@@ -1562,6 +1730,24 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
                     <button
                       type="button"
+                      onClick={() => setBroadcastTarget('single')}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                        broadcastTarget === 'single'
+                          ? 'border-sky-500 bg-sky-50/50 dark:bg-sky-950/20 text-sky-900 dark:text-sky-200 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black">👤 Tanlangan O‘quvchiga</span>
+                        {broadcastTarget === 'single' && <Check className="w-4 h-4 text-sky-500" />}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {selectedTargetUser ? selectedTargetUser.full_name : 'Ro‘yxatdan aniq 1 kishini tanlang'}
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setBroadcastTarget('all')}
                       className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
                         broadcastTarget === 'all'
@@ -1574,7 +1760,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                         {broadcastTarget === 'all' && <Check className="w-4 h-4 text-emerald-500" />}
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Bazadagi barcha Telegram ulangan ({profiles.filter(p => Boolean(p.telegram_id)).length} ta) o‘quvchilarga
+                        Barcha Telegram ulangan ({profiles.filter(p => Boolean(p.telegram_id)).length} ta) o‘quvchilarga
                       </p>
                     </button>
 
@@ -1596,6 +1782,145 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                       </p>
                     </button>
                   </div>
+
+                  {/* Single User Picker */}
+                  {broadcastTarget === 'single' && (
+                    <div className="pt-2 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-sky-500" />
+                          <span>Qaysi foydalanuvchiga yuborilsin?</span>
+                        </label>
+                        {selectedTargetUser && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTargetUser(null)}
+                            className="text-[11px] text-sky-600 dark:text-sky-400 hover:underline font-bold cursor-pointer"
+                          >
+                            Boshqa foydalanuvchi tanlash
+                          </button>
+                        )}
+                      </div>
+
+                      {selectedTargetUser ? (
+                        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-sky-500/60 shadow-xs flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                              {selectedTargetUser.avatar_url ? (
+                                <img src={selectedTargetUser.avatar_url} alt="" className="w-full h-full rounded-xl object-cover" />
+                              ) : (
+                                selectedTargetUser.full_name?.charAt(0).toUpperCase() || 'U'
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm truncate">
+                                  {selectedTargetUser.full_name}
+                                </h4>
+                                {selectedTargetUser.username && (
+                                  <span className="text-[11px] text-sky-500 font-semibold truncate">
+                                    @{selectedTargetUser.username}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-[11px]">
+                                {selectedTargetUser.telegram_id ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                    ✅ TG ID: {selectedTargetUser.telegram_id}
+                                  </span>
+                                ) : (
+                                  <span className="text-rose-500 font-bold">
+                                    ⚠️ TG ID ulanmagan
+                                  </span>
+                                )}
+                                <span className="text-slate-400 font-mono">
+                                  ⚡️ {selectedTargetUser.total_xp || 0} XP
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTargetUser(null)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                              type="text"
+                              value={broadcastUserSearch}
+                              onChange={(e) => setBroadcastUserSearch(e.target.value)}
+                              placeholder="Foydalanuvchi ismi, @username yoki telefon raqami..."
+                              className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-sky-500 transition"
+                            />
+                            {broadcastUserSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setBroadcastUserSearch('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="max-h-60 overflow-y-auto space-y-1 rounded-2xl border border-slate-200 dark:border-slate-800 p-2 bg-white dark:bg-slate-900 shadow-inner">
+                            {profiles
+                              .filter((p) => {
+                                if (!broadcastUserSearch.trim()) return true;
+                                const q = broadcastUserSearch.toLowerCase().trim();
+                                return (
+                                  (p.full_name && p.full_name.toLowerCase().includes(q)) ||
+                                  (p.username && p.username.toLowerCase().includes(q)) ||
+                                  (p.phone_number && p.phone_number.includes(q))
+                                );
+                              })
+                              .slice(0, 12)
+                              .map((p) => (
+                                <div
+                                  key={p.id}
+                                  onClick={() => setSelectedTargetUser(p)}
+                                  className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer border border-transparent hover:border-slate-200/60 dark:hover:border-slate-700/60"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-xs shrink-0">
+                                      {p.avatar_url ? (
+                                        <img src={p.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" />
+                                      ) : (
+                                        p.full_name?.charAt(0).toUpperCase() || 'U'
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                        {p.full_name}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400 truncate">
+                                        {p.username ? `@${p.username}` : p.phone_number || 'Username yo‘q'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    {p.telegram_id ? (
+                                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
+                                        TG: {p.telegram_id}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-medium text-amber-500">
+                                        TG ulanmagan
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Broadcast Form */}
@@ -1723,6 +2048,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({
 
                   {/* Book Selector Pills */}
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <button
+                      onClick={() => loadDictionaryBook(0)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap ${
+                        selectedBook === 0
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      Barchasi (1-6)
+                    </button>
                     {[1, 2, 3, 4, 5, 6].map((bNum) => (
                       <button
                         key={bNum}
@@ -1738,6 +2073,36 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                     ))}
                   </div>
                 </div>
+
+                {/* Unit Filter if specific book selected */}
+                {selectedBook > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-[11px] font-bold text-slate-400 shrink-0">Unit:</span>
+                    <button
+                      onClick={() => { setSelectedUnitFilter(0); setDictVisibleCount(60); }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer whitespace-nowrap ${
+                        selectedUnitFilter === 0
+                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200'
+                      }`}
+                    >
+                      Barchasi
+                    </button>
+                    {Array.from({ length: 30 }, (_, i) => i + 1).map((uNum) => (
+                      <button
+                        key={uNum}
+                        onClick={() => { setSelectedUnitFilter(uNum); setDictVisibleCount(60); }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer whitespace-nowrap ${
+                          selectedUnitFilter === uNum
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200'
+                        }`}
+                      >
+                        U{uNum}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Words Table */}
@@ -1765,7 +2130,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                        {filteredDictWords.map((w) => (
+                        {filteredDictWords.slice(0, dictVisibleCount).map((w) => (
                           <tr key={w.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                             <td className="py-3 px-4">
                               <span className="font-bold text-slate-900 dark:text-white block text-sm">
@@ -1806,8 +2171,20 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                     </table>
                   </div>
                 )}
+
+                {filteredDictWords.length > dictVisibleCount && (
+                  <div className="p-3 text-center border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                    <button
+                      onClick={() => setDictVisibleCount((c) => c + 60)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition cursor-pointer"
+                    >
+                      Yana 60 ta so‘z ko‘rsatish ({filteredDictWords.length - dictVisibleCount} ta qoldi)
+                    </button>
+                  </div>
+                )}
+
                 <div className="p-3 bg-slate-50/70 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/60 text-xs text-slate-400 text-center">
-                  Ko‘rsatilmoqda: <span className="font-bold text-slate-700 dark:text-slate-200">{filteredDictWords.length}</span> ta so‘z (Kitob {selectedBook})
+                  Ko‘rsatilmoqda: <span className="font-bold text-slate-700 dark:text-slate-200">{Math.min(dictVisibleCount, filteredDictWords.length)}</span> / {filteredDictWords.length} ta so‘z ({selectedBook === 0 ? 'Barcha 4000 ta so‘z' : `Kitob ${selectedBook}`}{selectedUnitFilter > 0 ? `, Unit ${selectedUnitFilter}` : ''})
                 </div>
               </div>
             </div>
@@ -2322,6 +2699,25 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>O‘chirish</span>
               </button>
+
+              <button
+                onClick={() => {
+                  const target = selectedUser;
+                  setSelectedUser(null);
+                  setDirectMessageUser(target);
+                  setDirectMessageTitle('');
+                  setDirectMessageBody('');
+                  setDirectMessageButtonText('🌐 Saytga kirish');
+                  setDirectMessageButtonUrl('https://lexis4000.uz');
+                  setDirectMessageCustomChatId(target.telegram_id ? String(target.telegram_id) : '');
+                  setDirectMessageResult(null);
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Telegramdan xabar</span>
+              </button>
+
               <button
                 onClick={() => setSelectedUser(null)}
                 className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
@@ -2329,6 +2725,243 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                 Yopish
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          DIRECT TELEGRAM MESSAGE MODAL (1-ON-1)
+          ========================================== */}
+      {directMessageUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn"
+          onClick={() => {
+            if (!isSendingDirectMessage) {
+              setDirectMessageUser(null);
+              setDirectMessageResult(null);
+            }
+          }}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-900/40 flex items-center justify-center text-sky-500">
+                  <Send className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                    Telegram orqali shaxsiy xabar
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Foydalanuvchiga Telegram boti nomidan to‘g‘ridan-to‘g‘ri xabar yetkaziladi
+                  </p>
+                </div>
+              </div>
+              <button
+                disabled={isSendingDirectMessage}
+                onClick={() => {
+                  setDirectMessageUser(null);
+                  setDirectMessageResult(null);
+                }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Recipient Card */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800/70 mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  {directMessageUser.avatar_url ? (
+                    <img src={directMessageUser.avatar_url} alt="" className="w-full h-full rounded-xl object-cover" />
+                  ) : (
+                    directMessageUser.full_name?.charAt(0).toUpperCase() || 'U'
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                    {directMessageUser.full_name}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {directMessageUser.username ? `@${directMessageUser.username}` : directMessageUser.phone_number || 'ID: ' + directMessageUser.id.substring(0, 8)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                {directMessageUser.telegram_id ? (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                    TG: {directMessageUser.telegram_id}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                    TG ulanmagan
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* If no Telegram ID, allow entering manually */}
+            {!directMessageUser.telegram_id && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/60 space-y-2">
+                <div className="flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    Foydalanuvchi saytga Telegram orqali kirmagan. Agar uning Chat ID sini bilsangiz, pastga yozing:
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={directMessageCustomChatId}
+                  onChange={(e) => setDirectMessageCustomChatId(e.target.value)}
+                  placeholder="Telegram Chat ID (masalan: 1102377043)"
+                  className="w-full px-3 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 text-slate-900 dark:text-white placeholder:text-slate-400 font-mono"
+                />
+              </div>
+            )}
+
+            {/* Quick Templates */}
+            <div className="mb-3">
+              <span className="text-[10px] font-bold text-slate-400 block mb-1.5">
+                Tezkor shablonlar:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDirectMessageTitle('⏰ Dars vaqti keldi!');
+                    setDirectMessageBody(`Assalomu alaykum, ${directMessageUser.full_name}! Lexis 4000 da bugungi so‘z mashg‘ulotlarini bajarishni unutmang. Ketma-ketlikni boy bermang! 🔥`);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition cursor-pointer"
+                >
+                  🔥 Dars eslatmasi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDirectMessageTitle('💪 O‘rganishda davom eting!');
+                    setDirectMessageBody(`Salom, ${directMessageUser.full_name}! Har kuni atigi 10-15 daqiqa ingliz tili o‘rganish natijani keskin oshiradi. Yangi 20 ta so‘z sizni kutmoqda! 🚀`);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition cursor-pointer"
+                >
+                  💪 Motivatsiya
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDirectMessageTitle('🎉 Ajoyib natija!');
+                    setDirectMessageBody(`Tabriklaymiz, ${directMessageUser.full_name}! Siz Lexis 4000 da faollik ko‘rsatib, ajoyib natijaga erishdingiz. Yangi marralar sari olg‘a! ⭐️`);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition cursor-pointer"
+                >
+                  🎉 Tabrik
+                </button>
+              </div>
+            </div>
+
+            {/* Direct Message Form */}
+            <form onSubmit={handleSendDirectMessage} className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Sarlavha (Ixtiyoriy)
+                </label>
+                <input
+                  type="text"
+                  value={directMessageTitle}
+                  onChange={(e) => setDirectMessageTitle(e.target.value)}
+                  placeholder="masalan: ⏰ Kunlik mashg‘ulot eslatmasi"
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-sky-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Xabar matni *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={directMessageBody}
+                  onChange={(e) => setDirectMessageBody(e.target.value)}
+                  placeholder="Xabaringizni yozing..."
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:border-sky-500 transition"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tugma matni (Ixtiyoriy)
+                  </label>
+                  <input
+                    type="text"
+                    value={directMessageButtonText}
+                    onChange={(e) => setDirectMessageButtonText(e.target.value)}
+                    placeholder="🌐 Saytga kirish"
+                    className="w-full px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Tugma havolasi (URL)
+                  </label>
+                  <input
+                    type="url"
+                    value={directMessageButtonUrl}
+                    onChange={(e) => setDirectMessageButtonUrl(e.target.value)}
+                    placeholder="https://lexis4000.uz"
+                    className="w-full px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* Status Alert */}
+              {directMessageResult && (
+                <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  directMessageResult.ok
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                    : 'bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                }`}>
+                  {directMessageResult.ok ? <Check className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
+                  <span>{directMessageResult.message}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isSendingDirectMessage}
+                  onClick={() => {
+                    setDirectMessageUser(null);
+                    setDirectMessageResult(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer"
+                >
+                  Yopish
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingDirectMessage || !directMessageBody.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-black text-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 active:scale-95"
+                >
+                  {isSendingDirectMessage ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Yuborilmoqda...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Xabarni yuborish</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

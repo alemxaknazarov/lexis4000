@@ -36,6 +36,19 @@ export default async function handler(req: any, res: any) {
     if (target_type === 'test_alem') {
       // Send only to Alem for safe preview
       targetIds = [1102377043];
+    } else if (target_type === 'single' || target_type === 'specific') {
+      const { target_chat_id, target_chat_ids } = req.body || {};
+      if (target_chat_id) {
+        targetIds = [Number(target_chat_id)];
+      } else if (Array.isArray(target_chat_ids) && target_chat_ids.length > 0) {
+        targetIds = target_chat_ids.map((id: any) => Number(id)).filter((id: number) => !isNaN(id) && id > 0);
+      }
+      if (targetIds.length === 0) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Foydalanuvchida Telegram ID topilmadi yoki kiritilmadi'
+        });
+      }
     } else if (target_type === 'active_streak') {
       // Send only to users with streak > 0
       const { data: activeUsers } = await supabase
@@ -60,7 +73,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // Deduplicate IDs
-    const uniqueIds = Array.from(new Set(targetIds));
+    const uniqueIds = Array.from(new Set(targetIds)).filter((id) => !isNaN(id) && id > 0);
 
     if (uniqueIds.length === 0) {
       return res.status(200).json({
@@ -95,6 +108,7 @@ export default async function handler(req: any, res: any) {
 
     let sentCount = 0;
     let failedCount = 0;
+    let lastError = '';
 
     for (const chatId of uniqueIds) {
       try {
@@ -118,10 +132,21 @@ export default async function handler(req: any, res: any) {
           sentCount++;
         } else {
           failedCount++;
+          lastError = data?.description || 'Telegram xabarni qabul qilmadi';
         }
-      } catch {
+      } catch (e: any) {
         failedCount++;
+        lastError = e?.message || 'Tarmoq xatosi';
       }
+    }
+
+    if (uniqueIds.length === 1 && failedCount === 1) {
+      return res.status(400).json({
+        ok: false,
+        error: `Xabar yuborilmadi: ${lastError}`,
+        sent_count: 0,
+        failed_count: 1
+      });
     }
 
     return res.status(200).json({
