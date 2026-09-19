@@ -4,9 +4,19 @@ export interface AvatarItem {
   category: 'boys' | 'girls' | 'mascots';
   categoryLabel: string;
   url: string;
+  isExclusive?: boolean;
 }
 
 export const AVATAR_LIST: AvatarItem[] = [
+  // Exclusive Creator Avatar for Alem
+  {
+    id: 'alem-creator',
+    name: 'Alem (VIP Creator)',
+    category: 'mascots',
+    categoryLabel: 'VIP Asoschi',
+    url: '/avatars/alem-creator.jpg',
+    isExclusive: true
+  },
   // Boys
   {
     id: 'boy-1',

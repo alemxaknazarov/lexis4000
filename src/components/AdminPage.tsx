@@ -417,7 +417,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                Admin Login / Username
+                Admin Login
               </label>
               <div className="relative">
                 <input
@@ -425,7 +425,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   required
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
-                  placeholder="masalan: alem yoki admin"
+                  placeholder="Loginni kiriting"
                   className="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                   autoFocus
                 />
@@ -442,7 +442,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   required
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="Admin parolini kiriting"
+                  placeholder="Parolni kiriting"
                   className="w-full pl-4 pr-10 py-2.5 rounded-xl text-sm bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
                 />
                 <button
@@ -474,14 +474,11 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             </button>
           </form>
 
-          {/* Quick Notice */}
+          {/* Quick Action */}
           <div className="mt-6 pt-4 border-t border-slate-800/80 text-center">
-            <p className="text-[11px] text-slate-500">
-              Standart boshlang‘ich parol: <code className="text-emerald-400 font-mono font-bold bg-slate-950 px-1.5 py-0.5 rounded-md border border-slate-800">alem4000</code>
-            </p>
             <button
               onClick={onGoHome}
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition mt-3 cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition cursor-pointer"
             >
               <Home className="w-3.5 h-3.5" />
               <span>Sayt bosh sahifasiga qaytish</span>
@@ -1394,14 +1391,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.confirm('Haqiqatan ham parolni boshlang‘ich alem4000 ga qaytarmoqchimisiz?')) {
+                      if (window.confirm('Haqiqatan ham parolni boshlang‘ich holatga qaytarmoqchimisiz?')) {
                         localStorage.removeItem('lexis_admin_pwd_hash');
-                        setPwdMsg({ type: 'success', text: 'Parol standart holatga (alem4000) qaytarildi!' });
+                        setPwdMsg({ type: 'success', text: 'Parol muvaffaqiyatli boshlang‘ich holatga qaytarildi!' });
                       }
                     }}
                     className="text-[11px] text-slate-400 hover:text-red-500 transition cursor-pointer underline"
                   >
-                    Parolni standart holatga (alem4000) qaytarish
+                    Parolni boshlang‘ich holatga qaytarish
                   </button>
                 </div>
               </div>

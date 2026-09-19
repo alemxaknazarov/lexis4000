@@ -869,6 +869,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         onClose={() => setIsAvatarPickerOpen(false)}
         currentAvatarUrl={userProfile.avatar_url}
         onSelectAvatar={handleSelectAvatar}
+        currentUser={userProfile}
       />
 
       {/* Edit Profile Modal (Name, Bio, Track, Target) */}
