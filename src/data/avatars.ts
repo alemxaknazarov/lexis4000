@@ -1,15 +1,102 @@
 export interface AvatarItem {
   id: string;
   name: string;
-  category: 'boys' | 'girls' | 'mascots';
+  category: 'superheroes' | 'boys' | 'girls' | 'mascots';
   categoryLabel: string;
   url: string;
-  requiredXp: number; // 0 = Free, 50 = Premium, 100 = Legendary Premium
-  tier?: 'free' | 'premium' | 'legendary';
+  requiredXp: number; // 0 = Free, 50 = Premium, 100 = Legendary, >100 = Marvel & DC Superheroes
+  tier?: 'free' | 'premium' | 'legendary' | 'superhero';
+  universe?: 'Marvel' | 'DC';
 }
 
 export const AVATAR_LIST: AvatarItem[] = [
-  // --- BOYS ---
+  // ==========================================
+  // MARVEL & DC SUPERHEROES (> 100 XP)
+  // ==========================================
+  {
+    id: 'spider-man',
+    name: 'Spider-Man',
+    category: 'superheroes',
+    categoryLabel: 'Marvel',
+    url: '/avatars/spider-man.png',
+    requiredXp: 120,
+    tier: 'superhero',
+    universe: 'Marvel'
+  },
+  {
+    id: 'captain-america',
+    name: 'Captain America',
+    category: 'superheroes',
+    categoryLabel: 'Marvel',
+    url: '/avatars/captain-america.png',
+    requiredXp: 120,
+    tier: 'superhero',
+    universe: 'Marvel'
+  },
+  {
+    id: 'iron-man',
+    name: 'Iron Man',
+    category: 'superheroes',
+    categoryLabel: 'Marvel',
+    url: '/avatars/iron-man.png',
+    requiredXp: 150,
+    tier: 'superhero',
+    universe: 'Marvel'
+  },
+  {
+    id: 'thor',
+    name: 'Thor',
+    category: 'superheroes',
+    categoryLabel: 'Marvel',
+    url: '/avatars/thor.png',
+    requiredXp: 150,
+    tier: 'superhero',
+    universe: 'Marvel'
+  },
+  {
+    id: 'hulk',
+    name: 'Hulk',
+    category: 'superheroes',
+    categoryLabel: 'Marvel',
+    url: '/avatars/hulk.png',
+    requiredXp: 150,
+    tier: 'superhero',
+    universe: 'Marvel'
+  },
+  {
+    id: 'batman',
+    name: 'Batman (The Dark Knight)',
+    category: 'superheroes',
+    categoryLabel: 'DC Comics',
+    url: '/avatars/batman.jpg',
+    requiredXp: 200,
+    tier: 'superhero',
+    universe: 'DC'
+  },
+  {
+    id: 'superman',
+    name: 'Superman (Man of Steel)',
+    category: 'superheroes',
+    categoryLabel: 'DC Comics',
+    url: '/avatars/superman.jpg',
+    requiredXp: 200,
+    tier: 'superhero',
+    universe: 'DC'
+  },
+  {
+    id: 'joker',
+    name: 'Joker',
+    category: 'superheroes',
+    categoryLabel: 'DC Comics',
+    url: '/avatars/joker.png',
+    requiredXp: 200,
+    tier: 'superhero',
+    universe: 'DC'
+  },
+
+  // ==========================================
+  // BOYS (0 XP)
+  // ==========================================
   {
     id: 'boy-1',
     name: 'Bilimdon Yigit',
@@ -37,17 +124,10 @@ export const AVATAR_LIST: AvatarItem[] = [
     requiredXp: 0,
     tier: 'free'
   },
-  {
-    id: 'super-boy',
-    name: 'Super Qahramon',
-    category: 'boys',
-    categoryLabel: 'O‘g‘il bolalar',
-    url: '/avatars/super-boy.jpg',
-    requiredXp: 100,
-    tier: 'legendary'
-  },
 
-  // --- GIRLS ---
+  // ==========================================
+  // GIRLS (0 XP - 50 XP)
+  // ==========================================
   {
     id: 'girl-1',
     name: 'Zukko Qiz',
@@ -85,7 +165,9 @@ export const AVATAR_LIST: AvatarItem[] = [
     tier: 'premium'
   },
 
-  // --- MASCOTS & LEGENDS ---
+  // ==========================================
+  // MASCOTS & 3D CREATURES (0 XP - 100 XP)
+  // ==========================================
   {
     id: 'fox',
     name: 'Ziyrak Tulki',

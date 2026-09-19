@@ -12,7 +12,7 @@ interface AvatarPickerModalProps {
   currentUser?: UserProfile | null;
 }
 
-type FilterCategory = 'all' | 'boys' | 'girls' | 'mascots';
+type FilterCategory = 'all' | 'superheroes' | 'boys' | 'girls' | 'mascots';
 
 export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
   isOpen,
@@ -25,7 +25,8 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
   const [selectedUrl, setSelectedUrl] = useState<string>(() => {
     const current = getAvatarUrl(currentAvatarUrl);
     if (current) return current;
-    return AVATAR_LIST[0].url;
+    const firstFree = AVATAR_LIST.find((a) => a.requiredXp === 0);
+    return firstFree ? firstFree.url : AVATAR_LIST[0].url;
   });
   const [saving, setSaving] = useState<boolean>(false);
   const [lockToast, setLockToast] = useState<string | null>(null);
@@ -57,8 +58,9 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
     if (!isUnlocked) {
       sounds.playWrong();
       const needed = avatar.requiredXp - userXp;
+      const heroCategory = avatar.category === 'superheroes' ? 'superqahramon' : 'avatar';
       setLockToast(
-        `🔒 Ushbu ${avatar.requiredXp} XP lik premium avatarni ochish uchun yana ${needed} XP to‘plang! (Sizda: ${userXp} XP)`
+        `🔒 Ushbu ${avatar.requiredXp} XP lik ${heroCategory}ni ochish uchun yana ${needed} XP to‘plang! (Sizda: ${userXp} XP)`
       );
       setTimeout(() => setLockToast(null), 3500);
       return;
@@ -106,10 +108,10 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
               </div>
               <div>
                 <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                  3D Avatar tanlash
+                  Avatar tanlash
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Profil va liderlar jadvalidagi qahramoningiz
+                  Marvel, DC va 3D qahramonlar kolleksiyasi
                 </p>
               </div>
             </div>
@@ -123,11 +125,11 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
           </div>
 
           {/* User Status Ribbon */}
-          <div className="mt-3 flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 text-xs">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 text-xs">
             {isAlem ? (
               <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
                 <Crown className="w-4 h-4 fill-amber-500 text-amber-500 shrink-0" />
-                <span>👑 Alem Rejimi: Barcha 17 ta avatar sizga ochiq!</span>
+                <span>👑 Alem Rejimi: Barcha Marvel, DC va 3D avatarlar sizga 100% ochiq!</span>
               </div>
             ) : (
               <>
@@ -135,8 +137,8 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                   <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                   <span>Sizning balansingiz: <strong className="font-mono text-slate-900 dark:text-white font-bold">{userXp} XP</strong></span>
                 </div>
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                  50 va 100 XP da yangi avatarlar ochiladi
+                <span className="text-[11px] text-rose-600 dark:text-rose-400 font-bold">
+                  🦸 120-200 XP da Marvel & DC ochiladi
                 </span>
               </>
             )}
@@ -162,6 +164,16 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
             }`}
           >
             Barchasi ({AVATAR_LIST.length})
+          </button>
+          <button
+            onClick={() => setActiveCategory('superheroes')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1 ${
+              activeCategory === 'superheroes'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <span>🦸 Marvel & DC ({AVATAR_LIST.filter((a) => a.category === 'superheroes').length})</span>
           </button>
           <button
             onClick={() => setActiveCategory('boys')}
@@ -222,8 +234,18 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
 
                 {/* Tier / Lock Badge */}
                 {!isUnlocked ? (
-                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-slate-900/80 text-white font-mono font-bold text-[9px] flex items-center gap-1 z-10 shadow-xs backdrop-blur-xs">
+                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-slate-900/85 text-white font-mono font-bold text-[9px] flex items-center gap-1 z-10 shadow-xs backdrop-blur-xs">
                     <Lock className="w-2.5 h-2.5 text-rose-400" />
+                    <span>{avatar.requiredXp} XP</span>
+                  </div>
+                ) : avatar.category === 'superheroes' ? (
+                  <div className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-white font-mono font-black text-[9px] flex items-center gap-0.5 z-10 shadow-xs ${
+                    avatar.universe === 'Marvel'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-700'
+                      : 'bg-gradient-to-r from-blue-700 to-indigo-900'
+                  }`}>
+                    <span>{avatar.universe}</span>
+                    <span>•</span>
                     <span>{avatar.requiredXp} XP</span>
                   </div>
                 ) : avatar.requiredXp === 100 ? (
@@ -238,24 +260,30 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
                   </div>
                 ) : null}
 
-                {/* Avatar Image with Locked Grayscale/Blur effect if not unlocked */}
-                <div className={`w-full h-full rounded-xl overflow-hidden bg-white dark:bg-slate-800 shadow-2xs transition-transform ${
+                {/* Avatar Image container */}
+                <div className={`w-full h-full rounded-xl overflow-hidden shadow-2xs transition-transform flex items-center justify-center ${
+                  avatar.url.endsWith('.png')
+                    ? 'bg-slate-100 dark:bg-slate-800/80 p-2'
+                    : 'bg-white dark:bg-slate-800'
+                } ${
                   isUnlocked ? 'group-hover:scale-105' : 'grayscale-[40%] contrast-90'
                 }`}>
                   <img
                     src={avatar.url}
                     alt={avatar.name}
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full ${
+                      avatar.url.endsWith('.png') ? 'object-contain' : 'object-cover'
+                    }`}
                     loading="lazy"
                   />
                 </div>
 
                 {/* Lock Overlay on Hover if locked */}
                 {!isUnlocked && (
-                  <div className="absolute inset-0 rounded-2xl bg-slate-950/40 backdrop-blur-[1px] flex flex-col items-center justify-center text-white z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute inset-0 rounded-2xl bg-slate-950/45 backdrop-blur-[1px] flex flex-col items-center justify-center text-white z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
                     <Lock className="w-5 h-5 text-amber-400 mb-0.5" />
                     <span className="text-[10px] font-bold font-mono text-amber-300">
-                      {avatar.requiredXp} XP
+                      {avatar.requiredXp} XP kerak
                     </span>
                   </div>
                 )}
@@ -271,8 +299,12 @@ export const AvatarPickerModal: React.FC<AvatarPickerModalProps> = ({
               <p className="text-xs text-slate-600 dark:text-slate-300 truncate">
                 Tanlandi: <strong className="text-slate-900 dark:text-white font-bold">{selectedItem.name}</strong>
                 {selectedItem.requiredXp > 0 && (
-                  <span className="ml-1.5 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                    ({selectedItem.requiredXp} XP)
+                  <span className={`ml-1.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    selectedItem.category === 'superheroes'
+                      ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/60'
+                      : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {selectedItem.requiredXp} XP
                   </span>
                 )}
               </p>
