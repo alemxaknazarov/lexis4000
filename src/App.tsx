@@ -19,6 +19,7 @@ import { MistakesPage } from './components/MistakesPage';
 import { LoginPage } from './components/LoginPage';
 import { ProfilePage } from './components/ProfilePage';
 import { SettingsPage } from './components/SettingsPage';
+import { AdminPage } from './components/AdminPage';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { resolveRoute, routes, type AppView } from './router/routes';
 import { stopAudio } from './utils/speech';
@@ -625,6 +626,17 @@ export function App() {
   const currentUnitWords = allWords.filter(
     (w) => w.book_number === selectedBook && w.unit_number === selectedUnit
   );
+
+  // Dedicated Full-page Admin View (/admin-uchun)
+  if (currentView === 'admin') {
+    return (
+      <AdminPage
+        onGoHome={navigateToHome}
+        isDark={isDark}
+        onToggleTheme={() => handleSetThemeMode(isDark ? 'light' : 'dark')}
+      />
+    );
+  }
 
   // Dedicated Full-page Login View (42.uz style)
   if (currentView === 'login') {

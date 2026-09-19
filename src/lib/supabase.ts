@@ -37,6 +37,7 @@ export interface UserProfile {
   total_xp: number;
   streak_days: number;
   last_study_date?: string;
+  created_at?: string;
 }
 
 export interface UnitProgress {

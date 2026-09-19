@@ -1,6 +1,6 @@
 import type { UserProfile } from '../lib/supabase';
 
-export type AppView = 'catalog' | 'units' | 'words' | 'learning' | 'login' | 'profile' | 'leaderboard' | 'mistakes' | 'settings';
+export type AppView = 'catalog' | 'units' | 'words' | 'learning' | 'login' | 'profile' | 'leaderboard' | 'mistakes' | 'settings' | 'admin';
 
 export interface RouteResolution {
   view: AppView;
@@ -24,6 +24,10 @@ export function resolveRoute(pathname: string, userProfile: UserProfile | null):
   // 1. Static Routes
   if (cleanPath === '' || cleanPath === '/') {
     return { view: 'catalog', bookNumber: 1, unitNumber: 1 };
+  }
+
+  if (cleanPath === '/admin-uchun') {
+    return { view: 'admin', bookNumber: 1, unitNumber: 1 };
   }
 
   if (cleanPath === '/leaderboard') {
@@ -137,6 +141,7 @@ export const routes = {
   leaderboard: () => '/leaderboard',
   mistakes: () => '/mistakes',
   settings: () => '/settings',
+  admin: () => '/admin-uchun',
   book: (bookNumber: number) => `/book/${bookNumber}`,
   unit: (bookNumber: number, unitNumber: number) => `/book/${bookNumber}/unit/${unitNumber}`,
   learn: (bookNumber: number, unitNumber: number) => `/book/${bookNumber}/unit/${unitNumber}/learn`
