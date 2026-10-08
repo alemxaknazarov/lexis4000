@@ -1,15 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    '[LEXIS] Supabase environment variables are missing.\n' +
-    'Create a .env file with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.\n' +
-    'See .env.example for reference.'
-  );
-}
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL || 'https://edxexhujreeckecqbryy.supabase.co';
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  'sb_publishable_ha2IXQ54aPfxHLDSW6RQnA_8Miju1HS';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
