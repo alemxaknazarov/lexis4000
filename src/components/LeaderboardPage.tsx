@@ -41,7 +41,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, total_xp, avatar_url, last_study_date, created_at')
-        .order('total_xp', { ascending: false })
+        .order('total_xp', { ascending: false, nullsFirst: false })
         .order('last_study_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .limit(100);
@@ -126,7 +126,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
       </header>
 
       {/* 2. Main Leaderboard Page Content with Full Native Document Scroll */}
-      <main className="flex-1 pt-20 sm:pt-24 pb-16 max-w-4xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
+      <main className="flex-1 pt-20 sm:pt-24 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:pb-10 max-w-4xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
         {/* Hero Banner */}
         <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-amber-500/10 border border-amber-300 dark:border-amber-700/60 shadow-md shadow-amber-500/10 mb-3 text-amber-500">
@@ -385,21 +385,6 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
           )}
         </div>
       </main>
-
-      {/* 3. Footer */}
-      <footer className="w-full py-5 sm:py-6 text-center border-t border-slate-200/70 dark:border-slate-800/70 text-xs text-slate-400 dark:text-slate-500 font-medium">
-        <p className="flex items-center justify-center gap-1">
-          <span>made by</span>
-          <a
-            href="https://t.me/alem_42"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-2"
-          >
-            alem
-          </a>
-        </p>
-      </footer>
     </div>
   );
 };

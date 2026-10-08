@@ -8,11 +8,13 @@ import { recordMistake } from '../../utils/mistakeManager';
 
 interface Phase4VoiceProps {
   words: Word[];
+  onWordIndexChange?: (index: number) => void;
   onCompletePhase: (earnedXp: number, passedWordIds?: string[], failedWordIds?: string[]) => void;
 }
 
 export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
   words,
+  onWordIndexChange,
   onCompletePhase
 }) => {
   const [queue, setQueue] = useState<Word[]>([...words]);
@@ -23,7 +25,7 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
   const [passedWordIds, setPassedWordIds] = useState<Set<string>>(new Set());
   const [wordMistakes, setWordMistakes] = useState<Record<string, number>>({});
   const [failedWordIds, setFailedWordIds] = useState<Set<string>>(new Set());
-  const MAX_VOICE_ATTEMPTS = 5;
+  const MAX_VOICE_ATTEMPTS = 2;
 
   const recognitionRef = useRef<SpeechController | null>(null);
   const isTouchActiveRef = useRef<boolean>(false);
@@ -32,6 +34,7 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
   const isSupported = isSpeechRecognitionSupported();
 
   useEffect(() => {
+    onWordIndexChange?.(words.length - queue.length);
     stopAudio();
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -182,30 +185,36 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
   if (!currentWord) return null;
 
   return (
-    <div className="py-4 sm:py-8 px-4 max-w-lg mx-auto flex flex-col items-center">
-      {/* Header */}
-      <div className="w-full flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-          <span>4-Bosqich: Ovoz va Talaffuz</span>
-        </span>
-        <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
-          Qoldi: {queue.length} ta
-        </span>
+    <>
+      {/* Attached Top Indicator Bar (Seamlessly merged with Navbar in navbar color) */}
+      <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 py-2 transition-colors">
+        <div className="max-w-sm sm:max-w-md mx-auto">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/90 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>4-Bosqich: Ovoz va Talaffuz</span>
+            </span>
+            <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
+              Qoldi: {queue.length} ta
+            </span>
+          </div>
+
+          {/* Progress Line */}
+          <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-200"
+              style={{ width: `${Math.max(5, ((words.length - queue.length) / words.length) * 100)}%` }}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Progress Line */}
-      <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-5">
-        <div
-          className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-200"
-          style={{ width: `${Math.max(5, ((words.length - queue.length) / words.length) * 100)}%` }}
-        />
-      </div>
-
-      {/* Main Card */}
-      <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col items-center text-center transition-colors">
-        {/* Compact thumbnail */}
-        <div className="w-20 h-20 rounded-xl overflow-hidden mb-3 bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800">
+      {/* Main Exercise Container (Vertically centered in viewport) */}
+      <div className="min-h-[calc(100dvh-130px)] pt-14 pb-6 px-3 sm:px-4 max-w-sm sm:max-w-md mx-auto flex flex-col justify-center items-center my-auto">
+        {/* Main Card */}
+        <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xs flex flex-col items-center text-center transition-colors">
+          {/* Compact thumbnail */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden mb-2 bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 shrink-0">
           <img
             src={currentWord.image_url}
             alt={currentWord.word}
@@ -214,8 +223,8 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
         </div>
 
         {/* English Word & Audio Trigger */}
-        <div className="flex items-center justify-center gap-2 mb-1">
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight capitalize">
+        <div className="flex items-center justify-center gap-2 mb-0.5">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight capitalize">
             {currentWord.word}
           </h2>
           <button
@@ -225,18 +234,18 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
               speakWord(currentWord.word, currentWord.audio_url);
             }}
             title="Namunani eshitish"
-            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-700 flex items-center justify-center transition cursor-pointer"
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 border border-slate-200 dark:border-slate-700 flex items-center justify-center transition cursor-pointer"
           >
-            <Volume2 className="w-4 h-4" />
+            <Volume2 className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <p className="text-xs font-mono text-slate-500 dark:text-slate-400 mb-6">
+        <p className="text-[11px] sm:text-xs font-mono text-slate-400 dark:text-slate-500 mb-3">
           /{currentWord.phonetic}/
         </p>
 
         {/* Microphone Button (Desktop click-toggle & Mobile press-hold) */}
-        <div className="relative mb-3 flex flex-col items-center select-none">
+        <div className="relative mb-2.5 flex flex-col items-center select-none">
           <button
             type="button"
             onClick={handleClick}
@@ -244,13 +253,13 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchCancel}
             aria-label="Mikrofon"
-            className={`w-20 h-20 sm:w-22 sm:h-22 rounded-full flex items-center justify-center transition-all duration-200 shadow-md cursor-pointer select-none touch-none ${
+            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-md cursor-pointer select-none touch-none ${
               isListening
                 ? 'bg-emerald-600 text-white ring-8 ring-emerald-500/30 scale-110 animate-pulse'
                 : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-105 active:scale-95'
             }`}
           >
-            <Mic className={`w-8 h-8 sm:w-9 sm:h-9 ${isListening ? 'animate-bounce' : ''}`} />
+            <Mic className={`w-7 h-7 sm:w-8 sm:h-8 ${isListening ? 'animate-bounce' : ''}`} />
           </button>
         </div>
 
@@ -385,7 +394,8 @@ export const Phase4Voice: React.FC<Phase4VoiceProps> = ({
             </button>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };

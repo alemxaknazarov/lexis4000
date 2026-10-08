@@ -7,11 +7,13 @@ import { recordMistake } from '../../utils/mistakeManager';
 
 interface Phase2SpellingProps {
   words: Word[];
+  onWordIndexChange?: (index: number) => void;
   onCompletePhase: (earnedXp: number, passedWordIds?: string[], failedWordIds?: string[]) => void;
 }
 
 export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
   words,
+  onWordIndexChange,
   onCompletePhase
 }) => {
   const [queue, setQueue] = useState<Word[]>([...words]);
@@ -21,6 +23,7 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [wordMistakeCounts, setWordMistakeCounts] = useState<Record<string, number>>({});
   const [failedWordIds, setFailedWordIds] = useState<Set<string>>(new Set());
+  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const currentWord = queue[0];
@@ -38,6 +41,7 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
   };
 
   useEffect(() => {
+    onWordIndexChange?.(words.length - queue.length);
     stopAudio();
     setUserInput('');
     setStatus('typing');
@@ -46,7 +50,7 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
       playWordAudio();
     }
     if (inputRef.current) {
-      inputRef.current.focus();
+      inputRef.current.focus({ preventScroll: true });
     }
     return () => {
       stopAudio();
@@ -98,7 +102,7 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
           setUserInput('');
           setStatus('typing');
           if (inputRef.current) {
-            inputRef.current.focus();
+            inputRef.current.focus({ preventScroll: true });
           }
         }, 1300);
       } else {
@@ -117,7 +121,7 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
           setStatus('typing');
           setShowAnswer(false);
           if (inputRef.current) {
-            inputRef.current.focus();
+            inputRef.current.focus({ preventScroll: true });
           }
         }, 2200);
       }
@@ -133,83 +137,93 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
   if (!currentWord) return null;
 
   return (
-    <div className="py-4 sm:py-8 px-4 max-w-lg mx-auto flex flex-col items-center">
-      {/* Step Header */}
-      <div className="w-full flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-          <span>2-Bosqich: Eshitib to‘g‘ri yozish</span>
-        </span>
-        <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
-          Qoldi: {queue.length} ta
-        </span>
-      </div>
+    <>
+      {/* Attached Top Indicator Bar (Seamlessly merged with Navbar in navbar color) */}
+      <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 py-2 transition-colors">
+        <div className="max-w-sm sm:max-w-md mx-auto">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] sm:text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/90 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>2-Bosqich: Eshitib to‘g‘ri yozish</span>
+            </span>
+            <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400">
+              Qoldi: {queue.length} ta
+            </span>
+          </div>
 
-      {/* Progress Line */}
-      <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-5">
-        <div
-          className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-200"
-          style={{ width: `${Math.max(5, ((words.length - queue.length) / words.length) * 100)}%` }}
-        />
-      </div>
-
-      {/* Main Card */}
-      <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col items-center text-center transition-colors">
-        {/* Compact Illustration */}
-        <div className="w-full h-40 sm:h-48 rounded-xl overflow-hidden mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800">
-          <img
-            src={currentWord.image_url}
-            alt={currentWord.word}
-            className="w-full h-full object-cover"
-          />
+          {/* Progress Line */}
+          <div className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-200"
+              style={{ width: `${Math.max(5, ((words.length - queue.length) / words.length) * 100)}%` }}
+            />
+          </div>
         </div>
+      </div>
 
-        {/* Uzbek Meaning */}
-        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
-          O‘zbekcha tarjimasi:
-        </span>
-        <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-2">
-          {currentWord.translation_uz}
-        </h3>
+      {/* Main Exercise Container (Centered initially, glides to top when keyboard opens) */}
+      <div className={`min-h-[calc(100dvh-130px)] px-3 sm:px-4 max-w-sm sm:max-w-md mx-auto flex flex-col items-center transition-all duration-300 ${
+        isFocused ? 'pt-16 sm:pt-14 justify-start' : 'pt-14 pb-6 justify-center my-auto'
+      }`}>
+        {/* Main Card */}
+        <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-xs flex flex-col items-center text-center transition-colors">
+          {/* Compact Illustration (shrink-0 so keyboard never squashes or hides it) */}
+          <div className="w-28 h-20 sm:w-44 sm:h-28 rounded-xl overflow-hidden mb-1.5 bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 shrink-0 shadow-2xs">
+            <img
+              src={currentWord.image_url}
+              alt={currentWord.word}
+              className="w-full h-full object-cover"
+            />
+          </div>
 
-        {/* Pronunciation Audio Button */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            playWordAudio();
-            inputRef.current?.focus();
-          }}
-          className={`mb-5 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-            isPlayingAudio
-              ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-400 shadow-xs scale-105'
-              : 'bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-300'
-          }`}
-          title="Talaffuzni qayta eshitish"
-        >
-          <Volume2 className={`w-4 h-4 transition-transform ${isPlayingAudio ? 'animate-pulse text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`} />
-          <span>Talaffuzni eshitish</span>
-        </button>
+          {/* Uzbek Meaning */}
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5 shrink-0">
+            O‘zbekcha tarjimasi:
+          </span>
+          <h3 className="text-base sm:text-xl font-bold text-slate-900 dark:text-white mb-1 shrink-0">
+            {currentWord.translation_uz}
+          </h3>
 
-        {/* Letter Boxes Container with focused input */}
-        <div
-          onClick={() => inputRef.current?.focus()}
-          className="relative w-full flex flex-col items-center justify-center mb-5 cursor-text"
-        >
-          {/* Real input positioned strictly inside the letter boxes area */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={userInput}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck="false"
-            className="absolute inset-0 opacity-0 w-full h-full cursor-text z-10"
-            aria-label="So‘zni yozing"
-          />
+          {/* Pronunciation Audio Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              playWordAudio();
+              inputRef.current?.focus({ preventScroll: true });
+            }}
+            className={`mb-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer shrink-0 ${
+              isPlayingAudio
+                ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-400 shadow-xs scale-105'
+                : 'bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-emerald-300'
+            }`}
+            title="Talaffuzni qayta eshitish"
+          >
+            <Volume2 className={`w-3.5 h-3.5 transition-transform ${isPlayingAudio ? 'animate-pulse text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`} />
+            <span>Talaffuzni eshitish</span>
+          </button>
+
+          {/* Letter Boxes Container with focused input */}
+          <div
+            onClick={() => inputRef.current?.focus({ preventScroll: true })}
+            className="relative w-full flex flex-col items-center justify-center mb-2 cursor-text shrink-0"
+          >
+            {/* Real input positioned strictly inside the letter boxes area */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={userInput}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+              className="absolute inset-0 opacity-0 w-full h-full cursor-text z-10"
+              aria-label="So‘zni yozing"
+            />
 
           {/* Letter Boxes */}
           <div
@@ -286,8 +300,9 @@ export const Phase2Spelling: React.FC<Phase2SpellingProps> = ({
             <Check className="w-3.5 h-3.5" />
             <span>Tekshirish</span>
           </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };

@@ -211,7 +211,7 @@ export const MistakesPage: React.FC<MistakesPageProps> = ({
       </header>
 
       {/* 2. Main Mistakes Page Content */}
-      <main className="flex-1 pt-20 sm:pt-24 pb-44 sm:pb-16 max-w-5xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
+      <main className="flex-1 pt-20 sm:pt-24 pb-[max(9rem,calc(env(safe-area-inset-bottom)+7.5rem))] sm:pb-12 max-w-5xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
         {/* Hero Header Card */}
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 shadow-xs mb-6 relative overflow-hidden transition-colors">
           <div className="absolute -top-20 right-0 w-72 h-72 bg-rose-500/10 dark:bg-rose-500/8 rounded-full blur-3xl pointer-events-none" />

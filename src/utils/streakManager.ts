@@ -171,7 +171,6 @@ export async function recordStudyActivity(
   currentStreak: number
 ): Promise<{ streak: number; profile: UserProfile | null }> {
   const todayStr = getLocalDateString();
-  const nowIso = new Date().toISOString();
 
   let prevDate: string | null = null;
   if (profile?.last_study_date) {
@@ -208,7 +207,7 @@ export async function recordStudyActivity(
     const updatedProfile: UserProfile = {
       ...profile,
       streak_days: nextStreak,
-      last_study_date: nowIso
+      last_study_date: todayStr
     };
 
     try {
@@ -216,7 +215,7 @@ export async function recordStudyActivity(
         .from('profiles')
         .update({
           streak_days: nextStreak,
-          last_study_date: nowIso
+          last_study_date: todayStr
         })
         .eq('id', profile.id);
     } catch (err) {

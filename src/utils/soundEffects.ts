@@ -109,12 +109,19 @@ class SoundEngine {
   /**
    * Plays sound from an HTML5 Audio Element as instant fallback
    */
-  private playAudioElement(src: string, volume = 0.85) {
+  private playAudioElement(audio: HTMLAudioElement | null, fallbackSrc: string, volume = 0.85): boolean {
     try {
-      const a = new Audio(src);
+      const a = audio || new Audio(fallbackSrc);
+      a.currentTime = 0;
       a.volume = volume;
-      a.play().catch(() => {});
-    } catch (_) {}
+      const playPromise = a.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /**
@@ -129,7 +136,9 @@ class SoundEngine {
     }
 
     // 2. Try HTML5 Audio
-    this.playAudioElement('/sounds/correct.mp3', 0.9);
+    if (this.playAudioElement(this.correctAudio, '/sounds/correct.mp3', 0.9)) {
+      return;
+    }
 
     // 3. Fallback: Synthesize Apple Pay rising double chime if audio unavailable
     const ctx = this.getContext();
@@ -149,7 +158,9 @@ class SoundEngine {
     }
 
     // 2. Try HTML5 Audio
-    this.playAudioElement('/sounds/wrong.mp3', 0.85);
+    if (this.playAudioElement(this.wrongAudio, '/sounds/wrong.mp3', 0.85)) {
+      return;
+    }
 
     // 3. Fallback: Synthesize iOS double-bump rejection if audio unavailable
     const ctx = this.getContext();

@@ -41,9 +41,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Mobil pastki navigatsiya"
-      className="sm:hidden fixed bottom-3 left-3 right-3 z-50 max-w-md mx-auto rounded-3xl backdrop-blur-2xl bg-white/85 dark:bg-slate-900/85 border border-white/70 dark:border-slate-800/90 shadow-2xl shadow-slate-950/15 dark:shadow-black/60 px-2 py-1.5 transition-all"
+      className="sm:hidden fixed bottom-0 left-0 right-0 z-50 w-full backdrop-blur-2xl bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/80 dark:border-slate-800/80 shadow-lg px-2 pt-2.5 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.6rem))] transition-all"
     >
-      <div className="flex items-center justify-around gap-1">
+      <div className="max-w-md mx-auto flex items-center justify-around gap-1">
         {/* 1. Kitoblar (Bosh sahifa) */}
         <button
           type="button"

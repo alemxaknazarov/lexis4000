@@ -27,3 +27,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Auto-generated translation cache (dev artifact, do not commit)
+translations_cache.json

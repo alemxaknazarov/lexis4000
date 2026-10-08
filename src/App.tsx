@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, X, LogOut } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import type { Book, Word, UserProfile, UnitProgress } from './lib/supabase';
 import { loadBookWords } from './data/wordLoader';
@@ -24,8 +24,9 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { resolveRoute, routes, type AppView } from './router/routes';
 import { stopAudio } from './utils/speech';
 import { loadValidSession, saveSession, touchSession, clearSession } from './utils/sessionManager';
-import { checkAndUpdateStreak, recordStudyActivity } from './utils/streakManager';
+import { checkAndUpdateStreak, recordStudyActivity, getLocalDateString } from './utils/streakManager';
 import { getMistakeCount, removeMistake } from './utils/mistakeManager';
+import { useLearningSession } from './hooks/useLearningSession';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -60,11 +61,18 @@ export function App() {
   const isDark = themeMode === 'system' ? systemTheme === 'dark' : themeMode === 'dark';
 
   useEffect(() => {
+    const themeColor = isDark ? '#090d16' : '#f8fafc';
     if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    // Synchronize all theme-color meta tags for browsers, PWA and mobile status bars
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+    metas.forEach((meta) => {
+      meta.setAttribute('content', themeColor);
+    });
   }, [isDark]);
 
   const handleSetThemeMode = (mode: ThemeMode) => {
@@ -109,8 +117,6 @@ export function App() {
     );
     return res.unitNumber;
   });
-
-  const [learningPhase, setLearningPhase] = useState<number>(1);
 
   const scrollToTop = () => {
     if (typeof window !== 'undefined') {
@@ -181,13 +187,32 @@ export function App() {
       isMounted = false;
     };
   }, [selectedBook]);
-  const [selectedWords, setSelectedWords] = useState<Word[]>([]);
+
+  // Learning Session State (Decoupled Hook)
+  const {
+    learningPhase,
+    setLearningPhase,
+    sessionEarnedXp,
+    setSessionEarnedXp,
+    sessionWordPoints,
+    setSessionWordPoints,
+    sessionFailedWordIds,
+    setSessionFailedWordIds,
+    isMistakesSession,
+    setIsMistakesSession,
+    selectedWords,
+    setSelectedWords,
+    learnedWordIds,
+    setLearnedWordIds,
+    wordPhaseScores,
+    setWordPhaseScores,
+    resetSession
+  } = useLearningSession();
 
   // Gamification State
   const [xp, setXp] = useState<number>(() => {
     return parseInt(localStorage.getItem('lexis_xp') || '0', 10);
   });
-  const [sessionEarnedXp, setSessionEarnedXp] = useState<number>(0);
   const [streak, setStreak] = useState<number>(() => {
     return parseInt(localStorage.getItem('lexis_streak') || '0', 10);
   });
@@ -195,30 +220,14 @@ export function App() {
     const saved = localStorage.getItem('lexis_progress');
     return saved ? JSON.parse(saved) : [];
   });
-  const [learnedWordIds, setLearnedWordIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('lexis_learned_word_ids');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-  // Word Phase Scores: word.id -> number of passed phases (0..5)
-  const [wordPhaseScores, setWordPhaseScores] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem('lexis_word_phase_scores');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-  // In-session points per word (word.id -> passed phases in current session: 0..5)
-  const [sessionWordPoints, setSessionWordPoints] = useState<Record<string, number>>({});
-  // In-session failed word IDs (words that failed with 2 mistakes in any phase)
-  const [sessionFailedWordIds, setSessionFailedWordIds] = useState<Set<string>>(new Set());
-  const [isMistakesSession, setIsMistakesSession] = useState<boolean>(false);
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState<boolean>(false);
   const [mistakeCount, setMistakeCount] = useState<number>(() => getMistakeCount());
+  const [currentWordIndex, setCurrentWordIndex] = useState<number>(0);
+
+  useEffect(() => {
+    setCurrentWordIndex(0);
+  }, [learningPhase]);
 
   useEffect(() => {
     const handleUpdate = () => setMistakeCount(getMistakeCount());
@@ -321,6 +330,7 @@ export function App() {
           saveSession(finalProf);
           setUserProfile(finalProf);
           setStreak(streakRes.streak);
+          syncUserProgress(finalProf.id);
         } else {
           // If no Supabase OAuth session, check Telegram session in localStorage
           const current = loadValidSession();
@@ -342,6 +352,7 @@ export function App() {
                 setXp(updatedProfile.total_xp);
               }
               setStreak(streakRes.streak);
+              syncUserProgress(updatedProfile.id);
 
               if (updatedProfile.telegram_id) {
                 try {
@@ -396,6 +407,7 @@ export function App() {
         };
         saveSession(profile);
         setUserProfile(profile);
+        syncUserProgress(profile.id);
       }
       // Note: Do NOT call setUserProfile(null) when session is null,
       // because Telegram OTP auth is stored in localStorage / cookies and expires after 24 hours.
@@ -405,6 +417,41 @@ export function App() {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  // Syncs all unit progress from Supabase database for multi-device cross-platform persistence
+  const syncUserProgress = async (userId: string) => {
+    if (!userId) return;
+    try {
+      const { data, error } = await supabase
+        .from('user_unit_progress')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (!error && data && data.length > 0) {
+        setUnitProgressList(data);
+        localStorage.setItem('lexis_progress', JSON.stringify(data));
+
+        // Reconstruct learnedWordIds across devices from completed units
+        const completedUnits = data.filter((p: UnitProgress) => p.is_completed || (p.accuracy_percentage || 0) >= 100);
+        if (completedUnits.length > 0) {
+          const nextLearned = new Set<string>(learnedWordIds);
+          for (const item of completedUnits) {
+            try {
+              const bookWords = await loadBookWords(item.book_number);
+              const uWords = bookWords.filter((w) => w.unit_number === item.unit_number);
+              uWords.forEach((w) => nextLearned.add(w.id));
+            } catch (_) {}
+          }
+          setLearnedWordIds(nextLearned);
+          try {
+            localStorage.setItem('lexis_learned_word_ids', JSON.stringify(Array.from(nextLearned)));
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.warn('Could not sync user unit progress from Supabase:', e);
+    }
+  };
 
   // Save Progress to LocalStorage and Supabase
   const saveUnitProgress = async (
@@ -445,21 +492,28 @@ export function App() {
 
     if (userProfile) {
       try {
-        await supabase.from('user_unit_progress').upsert({
-          user_id: userProfile.id,
-          book_number: bookNum,
-          unit_number: unitNum,
-          accuracy_percentage: accuracy,
-          is_completed: isCompleted
-        });
+        const { error: upsertErr } = await supabase.from('user_unit_progress').upsert(
+          {
+            user_id: userProfile.id,
+            book_number: bookNum,
+            unit_number: unitNum,
+            accuracy_percentage: accuracy,
+            is_completed: isCompleted,
+            completed_at: new Date().toISOString()
+          },
+          { onConflict: 'user_id,book_number,unit_number' }
+        );
+
+        if (upsertErr) {
+          console.error('Supabase user_unit_progress upsert error:', upsertErr);
+        }
 
         const updatePayload: Record<string, any> = {
           total_xp: newXp
         };
         if (hasCompletedFullWord) {
-          const nowIso = new Date().toISOString();
           updatePayload.streak_days = activeStreak;
-          updatePayload.last_study_date = nowIso;
+          updatePayload.last_study_date = getLocalDateString();
         }
 
         await supabase.from('profiles').update(updatePayload).eq('id', userProfile.id);
@@ -609,18 +663,7 @@ export function App() {
     }
     setStreak(streakRes.streak);
 
-    try {
-      const { data } = await supabase
-        .from('user_unit_progress')
-        .select('*')
-        .eq('user_id', profile.id);
-      if (data && data.length > 0) {
-        setUnitProgressList(data);
-        localStorage.setItem('lexis_progress', JSON.stringify(data));
-      }
-    } catch (e) {
-      console.warn('Could not load unit progress from Supabase:', e);
-    }
+    syncUserProgress(finalProfile.id || profile.id);
   };
 
   const currentUnitWords = allWords.filter(
@@ -641,7 +684,7 @@ export function App() {
   // Dedicated Full-page Login View (42.uz style)
   if (currentView === 'login') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <LoginPage
           onSuccess={handleAuthSuccess}
           onGoHome={navigateToHome}
@@ -669,7 +712,7 @@ export function App() {
       return null;
     }
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <ProfilePage
           userProfile={userProfile}
           unitProgressList={unitProgressList}
@@ -707,7 +750,7 @@ export function App() {
   // Dedicated Full-page Settings View
   if (currentView === 'settings') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <SettingsPage
           themeMode={themeMode}
           onSetThemeMode={handleSetThemeMode}
@@ -734,7 +777,7 @@ export function App() {
   // Dedicated Full-page Leaderboard View
   if (currentView === 'leaderboard') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <LeaderboardPage
           currentUser={userProfile}
           onGoHome={navigateToHome}
@@ -759,7 +802,7 @@ export function App() {
   // Dedicated Full-page Mistakes View
   if (currentView === 'mistakes') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors pb-20 sm:pb-0`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <MistakesPage
           onStartLearning={handleStartMistakesLearning}
           onGoHome={navigateToHome}
@@ -785,29 +828,81 @@ export function App() {
   }
 
   return (
-    <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col overflow-x-clip transition-colors`}>
-      {/* Top Navbar */}
-      <Navbar
-        currentView={currentView}
-        onBack={handleBack}
-        onGoHome={navigateToHome}
-        userProfile={userProfile}
-        onOpenAuth={navigateToLogin}
-        onOpenProfile={navigateToProfile}
-        onOpenLeaderboard={navigateToLeaderboard}
-        mistakeCount={mistakeCount}
-        onOpenMistakes={() => navigate(routes.mistakes())}
-        xp={xp}
-        streak={streak}
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
-      />
+    <div className={`${isDark ? 'dark' : ''} min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col overflow-x-clip transition-colors`}>
+      {/* Top Navbar / Learning Header */}
+      {currentView === 'learning' ? (
+        <header className="fixed top-0 left-0 right-0 z-40 h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 flex items-center justify-between transition-colors">
+          {/* Exit (X) Button (Hidden on Result Page Phase 6) */}
+          {learningPhase < 6 ? (
+            <button
+              type="button"
+              onClick={() => setIsExitModalOpen(true)}
+              aria-label="Darsdan chiqish"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-95 cursor-pointer shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          ) : (
+            <div className="w-9 h-9 shrink-0" />
+          )}
+
+          {/* Phase Title & Word Counter */}
+          <div className="flex flex-col items-center min-w-0 px-2">
+            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+              {learningPhase === 1 && '1-Bosqich: So‘z yodlash'}
+              {learningPhase === 2 && '2-Bosqich: Eshitib yozish'}
+              {learningPhase === 3 && '3-Bosqich: To‘g‘ri ma’no'}
+              {learningPhase === 4 && '4-Bosqich: Talaffuz qilish'}
+              {learningPhase === 5 && '5-Bosqich: Rasmni topish'}
+              {learningPhase === 6 && 'Yakuniy Natijalar'}
+            </span>
+            <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+              {learningPhase < 6
+                ? `${Math.min(currentWordIndex + 1, Math.max(1, selectedWords.length))} / ${Math.max(1, selectedWords.length)} so‘z`
+                : 'Muvaffaqiyatli!'}
+            </span>
+          </div>
+
+          {/* Book & Unit Badge in Navbar style */}
+          <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/90 px-2.5 py-0.5 rounded-full shrink-0">
+            Unit {selectedUnit}
+          </div>
+
+          {/* Integrated Thin Progress Bar on Navbar bottom edge */}
+          {learningPhase < 6 && (
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-200"
+                style={{
+                  width: `${Math.max(5, ((currentWordIndex + 1) / Math.max(1, selectedWords.length)) * 100)}%`
+                }}
+              />
+            </div>
+          )}
+        </header>
+      ) : (
+        <Navbar
+          currentView={currentView}
+          onBack={handleBack}
+          onGoHome={navigateToHome}
+          userProfile={userProfile}
+          onOpenAuth={navigateToLogin}
+          onOpenProfile={navigateToProfile}
+          onOpenLeaderboard={navigateToLeaderboard}
+          mistakeCount={mistakeCount}
+          onOpenMistakes={() => navigate(routes.mistakes())}
+          xp={xp}
+          streak={streak}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+        />
+      )}
 
       {/* Main Content Views */}
-      <main className="flex-1 pt-14 sm:pt-16 pb-24 sm:pb-12">
+      <main className={`flex-1 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:pt-[calc(4rem+env(safe-area-inset-top,0px))] ${currentView === 'learning' || currentView === 'words' ? 'pb-4' : 'pb-4 sm:pb-6'}`}>
         {/* Sticky Back Button Bar (Stays pinned in place below Navbar when page scrolls) */}
-        {currentView !== 'catalog' && (
-          <div className="sticky top-14 sm:top-16 z-30 bg-slate-50 dark:bg-slate-950 py-2.5 transition-colors">
+        {currentView !== 'catalog' && currentView !== 'learning' && (
+          <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:top-[calc(4rem+env(safe-area-inset-top,0px))] z-30 bg-slate-50 dark:bg-slate-950 py-2.5 transition-colors">
             <div className="max-w-6xl mx-auto px-3.5 sm:px-6 flex items-center justify-between">
               <button
                 onClick={handleBack}
@@ -856,6 +951,7 @@ export function App() {
             {learningPhase === 1 && (
               <Phase1Flashcard
                 words={selectedWords}
+                onWordIndexChange={(idx) => setCurrentWordIndex(idx)}
                 onFinishPhase={() => {
                   setSessionWordPoints((prev) => {
                     const next = { ...prev };
@@ -872,6 +968,7 @@ export function App() {
             {learningPhase === 2 && (
               <Phase2Spelling
                 words={selectedWords}
+                onWordIndexChange={(idx) => setCurrentWordIndex(idx)}
                 onCompletePhase={(_earned, passedIds, failedIds) => {
                   if (failedIds && failedIds.length > 0) {
                     setSessionFailedWordIds((prev) => {
@@ -899,6 +996,7 @@ export function App() {
               <Phase3Quiz
                 words={selectedWords}
                 allWords={allWords}
+                onWordIndexChange={(idx) => setCurrentWordIndex(idx)}
                 onCompletePhase={(_earned, passedIds, failedIds) => {
                   if (failedIds && failedIds.length > 0) {
                     setSessionFailedWordIds((prev) => {
@@ -925,6 +1023,7 @@ export function App() {
             {learningPhase === 4 && (
               <Phase4Voice
                 words={selectedWords}
+                onWordIndexChange={(idx) => setCurrentWordIndex(idx)}
                 onCompletePhase={(_earned, passedIds, failedIds) => {
                   if (failedIds && failedIds.length > 0) {
                     setSessionFailedWordIds((prev) => {
@@ -952,6 +1051,7 @@ export function App() {
               <Phase5Visual
                 words={selectedWords}
                 allWords={allWords}
+                onWordIndexChange={(idx) => setCurrentWordIndex(idx)}
                 onCompletePhase={(_earned, passedIds, failedIds) => {
                   const finalFailed = new Set(sessionFailedWordIds);
                   if (failedIds && failedIds.length > 0) {
@@ -1068,14 +1168,7 @@ export function App() {
                     }
                   }}
                   onRestart={() => {
-                    setSessionEarnedXp(0);
-                    setSessionFailedWordIds(new Set());
-                    const initialPoints: Record<string, number> = {};
-                    selectedWords.forEach((w) => {
-                      initialPoints[w.id] = 0;
-                    });
-                    setSessionWordPoints(initialPoints);
-                    setLearningPhase(1);
+                    resetSession(selectedWords);
                   }}
                   onGoHome={() => {
                     navigate(routes.catalog());
@@ -1087,10 +1180,10 @@ export function App() {
         )}
       </main>
 
-      {/* Minimal Footer */}
-      {(currentView !== 'learning' || learningPhase === 6) && (
-        <footer className="w-full py-5 text-center border-t border-slate-200/70 dark:border-slate-800/70 text-xs text-slate-400 dark:text-slate-500 font-medium">
-          <p className="flex items-center justify-center gap-1">
+      {/* Minimal Footer: Faqat asosiy sahifalarda (Catalog va Units), yuqoriroq ko'rinishi uchun kengaytirilgan */}
+      {(currentView === 'catalog' || currentView === 'units') && (
+        <footer className="mt-auto w-full pt-5 pb-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] sm:py-6 text-center border-t border-slate-200/70 dark:border-slate-800/70 text-xs sm:text-sm text-slate-400 dark:text-slate-500 font-medium">
+          <p className="flex items-center justify-center gap-1.5">
             <span>made by</span>
             <a
               href="https://t.me/alem_42"
@@ -1104,8 +1197,8 @@ export function App() {
         </footer>
       )}
 
-      {/* Mobile Bottom Navigation Bar (Apple frosted glass effect, only when not in active learning) */}
-      {currentView !== 'learning' && (
+      {/* Mobile Bottom Navigation Bar (Apple frosted glass effect, only when not in active learning or word selection) */}
+      {currentView !== 'learning' && currentView !== 'words' && (
         <MobileBottomNav
           currentView={currentView}
           onGoHome={navigateToHome}
@@ -1117,6 +1210,57 @@ export function App() {
           onOpenProfile={navigateToProfile}
           onOpenAuth={navigateToLogin}
         />
+      )}
+
+      {/* Exit Learning Confirmation Modal (Sleek, static, no bouncing sticker) */}
+      {isExitModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center animate-scaleUp relative overflow-hidden">
+            {/* Subtle Ambient Red Glow */}
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
+
+            {/* Static Premium Icon Badge (No bouncing animation) */}
+            <div className="w-13 h-13 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-3 shadow-2xs">
+              <LogOut className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1.5 tracking-tight">
+              Darsdan chiqmoqchimisiz?
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed max-w-[280px]">
+              Hozir chiqsangiz, ushbu mashg‘ulotdagi natijalaringiz to‘liq saqlanmasligi mumkin.
+            </p>
+
+            <div className="flex items-center gap-2.5 w-full">
+              {/* Primary action: Stay in lesson */}
+              <button
+                type="button"
+                onClick={() => setIsExitModalOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition cursor-pointer active:scale-95"
+              >
+                Davom ettirish
+              </button>
+
+              {/* Destructive action: Exit */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsExitModalOpen(false);
+                  stopAudio();
+                  resetSession(selectedWords);
+                  if (isMistakesSession) {
+                    navigate(routes.mistakes());
+                  } else {
+                    navigate(routes.unit(selectedBook, selectedUnit));
+                  }
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer active:scale-95"
+              >
+                Chiqish
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Telegram Auth Modal */}

@@ -100,7 +100,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   const masteredCount = words.filter((w) => learnedWordIds?.has(w.id)).length;
 
   return (
-    <div className="py-4 sm:py-6 px-3.5 sm:px-6 max-w-4xl mx-auto pb-24 sm:pb-8">
+    <div className="py-4 sm:py-6 px-3.5 sm:px-6 max-w-4xl mx-auto">
       {/* Top Header Card */}
       <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200/90 dark:border-slate-800 p-3.5 sm:p-4 rounded-2xl mb-4 sm:mb-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -158,7 +158,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
       </div>
 
       {/* Words List Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pb-40 sm:pb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] sm:pb-6">
         {words.map((word) => {
           const isSelected = selectedWordIds.has(word.id);
           const isMastered = learnedWordIds?.has(word.id);
@@ -247,38 +247,38 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         })}
       </div>
 
-      {/* Mobile Fixed Bottom Action Bar (Floats cleanly right above MobileBottomNav) */}
-      <div className="sm:hidden fixed bottom-[76px] left-3 right-3 z-40 max-w-md mx-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-2.5 shadow-xl transition-all">
+      {/* Mobile Fixed Bottom Action Bar (Docked edge-to-edge as bottom bar, replacing MobileBottomNav on word select) */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 w-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t border-slate-200/80 dark:border-slate-800/80 shadow-lg px-3.5 pt-2.5 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.6rem))] transition-all">
         <div className="max-w-md mx-auto flex items-center justify-between gap-2.5">
           {/* Select All / Deselect button */}
           <button
             onClick={toggleSelectAll}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-xs font-semibold text-slate-700 dark:text-slate-200 transition cursor-pointer active:scale-95"
+            className="flex-1 min-w-0 flex items-center justify-center gap-2 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 transition cursor-pointer active:scale-95"
           >
             {isAllSelected ? (
               <>
-                <CheckSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span className="truncate">Bekor qilish</span>
               </>
             ) : (
               <>
-                <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <Square className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="truncate">Barchasi ({words.length})</span>
               </>
             )}
           </button>
 
-          {/* Start Study Button */}
+          {/* Start Study Button (Taller, primary action) */}
           <button
             onClick={handleStart}
             disabled={selectedWordIds.size === 0}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs shadow-sm transition cursor-pointer active:scale-95 ${
+            className={`flex-[1.4] min-w-0 flex items-center justify-center gap-2 h-12 rounded-xl font-bold text-xs sm:text-sm shadow-md transition cursor-pointer active:scale-95 ${
               selectedWordIds.size > 0
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 active:bg-emerald-800'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-200 dark:border-slate-700'
             }`}
           >
-            <Play className="w-3.5 h-3.5 fill-white shrink-0" />
+            <Play className="w-4 h-4 fill-white shrink-0" />
             <span className="truncate">
               {selectedWordIds.size > 0 ? `Boshlash (${selectedWordIds.size})` : 'So‘z tanlang'}
             </span>

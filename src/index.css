@@ -7,10 +7,10 @@
     margin: 0;
     padding: 0;
     min-height: 100%;
+    background-color: #f8fafc;
   }
 
   body {
-    background-color: #f8fafc;
     color: #0f172a;
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -18,8 +18,8 @@
     transition: background-color 0.15s ease, color 0.15s ease;
   }
 
-  .dark body {
-    background-color: #090d16;
+  html.dark, .dark, .dark body, html.dark body {
+    background-color: #090d16 !important;
     color: #f8fafc;
   }
 }

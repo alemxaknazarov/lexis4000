@@ -226,7 +226,7 @@ export const UnitSelector: React.FC<UnitSelectorProps> = ({
       : BOOK_1_UNIT_TITLES;
 
   return (
-    <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-6xl mx-auto">
+    <div className="pt-4 sm:pt-6 pb-2 sm:pb-4 px-3.5 sm:px-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3.5 sm:gap-4">

@@ -212,7 +212,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </header>
 
       {/* 2. Main Settings Content */}
-      <main className="flex-1 pt-18 sm:pt-22 pb-28 sm:pb-16 max-w-2xl w-full mx-auto px-3.5 sm:px-6 animate-fadeIn">
+      <main className="flex-1 pt-18 sm:pt-22 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:pb-10 max-w-2xl w-full mx-auto px-3.5 sm:px-6 animate-fadeIn">
         {/* Compact Header */}
         <div className="mb-5 text-left">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold mb-1.5">
@@ -511,21 +511,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           </div>
         </div>
       </main>
-
-      {/* 3. Footer */}
-      <footer className="w-full py-4 sm:py-5 border-t border-slate-200/70 dark:border-slate-800/70 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-        <p className="flex items-center justify-center gap-1">
-          <span>made by</span>
-          <a
-            href="https://t.me/alem_42"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-2"
-          >
-            alem
-          </a>
-        </p>
-      </footer>
     </div>
   );
 };

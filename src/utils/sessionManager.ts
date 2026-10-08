@@ -110,14 +110,22 @@ export function touchSession() {
 }
 
 /**
- * Explicitly terminates the session (user clicked Sign Out or session timed out)
+ * Explicitly terminates the session (user clicked Sign Out or session timed out).
+ * Clears ALL session-related keys from localStorage to prevent stale data.
  */
 export function clearSession() {
   if (typeof window === 'undefined') return;
 
   try {
-    localStorage.removeItem(SESSION_KEYS.PROFILE);
-    localStorage.removeItem(SESSION_KEYS.TIMESTAMP);
+    // Remove all session keys
+    Object.values(SESSION_KEYS).forEach((key) => {
+      if (key !== SESSION_KEYS.COOKIE_NAME) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Also clear guest streak / study date keys
+    localStorage.removeItem('lexis_last_study_date');
+
     clearSessionCookie();
     supabase.auth.signOut().catch(() => {});
   } catch (err) {

@@ -255,20 +255,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
       </main>
 
-      {/* 3. Minimal Footer */}
-      <footer className="w-full py-5 border-t border-slate-200/70 dark:border-slate-800/70 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-        <p className="flex items-center justify-center gap-1">
-          <span>made by</span>
-          <a
-            href="https://t.me/alem_42"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-2"
-          >
-            alem
-          </a>
-        </p>
-      </footer>
     </div>
   );
 };
