@@ -10,17 +10,11 @@ export interface RouteResolution {
 }
 
 /**
- * Allowed admin usernames (must match profiles.username in Supabase).
- * Keep this list short and in sync with AdminPage.tsx logic.
- */
-const ADMIN_USERNAMES = ['admin', 'alem'];
-
-/**
  * Route & Middleware Processor
  *
  * Handled Middleware Guards:
  * 1. Auth Guard: Blocks guests from accessing /profile and redirects to /login.
- * 2. Admin Guard: Only authenticated admin users can access /admin-uchun.
+ * 2. Admin Route: Direct access to admin panel via /admin-uchun or /admin (authenticated inside AdminPage).
  * 3. Book Param Guard: Validates book range 1..6, falls back to / if invalid.
  * 4. Unit Param Guard: Validates unit range 1..30, falls back to /book/:bookNumber if invalid.
  * 5. Path Normalizer: Trims trailing slashes.
@@ -33,16 +27,8 @@ export function resolveRoute(pathname: string, userProfile: UserProfile | null):
     return { view: 'catalog', bookNumber: 1, unitNumber: 1 };
   }
 
-  // 2. Admin Guard: Must be logged in AND be a known admin username
-  if (cleanPath === '/admin-uchun') {
-    if (!userProfile) {
-      return { view: 'login', bookNumber: 1, unitNumber: 1, redirectUrl: '/login' };
-    }
-    const username = (userProfile.username || '').toLowerCase();
-    if (!ADMIN_USERNAMES.includes(username)) {
-      // Not an admin — silently redirect to catalog
-      return { view: 'catalog', bookNumber: 1, unitNumber: 1, redirectUrl: '/' };
-    }
+  // 2. Admin Route: Opens AdminPage login screen directly
+  if (cleanPath === '/admin-uchun' || cleanPath === '/admin') {
     return { view: 'admin', bookNumber: 1, unitNumber: 1 };
   }
 
