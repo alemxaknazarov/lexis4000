@@ -178,9 +178,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between transition-colors selection:bg-emerald-500/20">
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between transition-colors selection:bg-emerald-500/20">
       {/* 1. Top Navbar */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors pt-[env(safe-area-inset-top,0px)]">
         <div className="max-w-3xl mx-auto px-3.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
           {/* Brand Logo */}
           <div
@@ -212,7 +212,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       </header>
 
       {/* 2. Main Settings Content */}
-      <main className="flex-1 pt-18 sm:pt-22 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:pb-10 max-w-2xl w-full mx-auto px-3.5 sm:px-6 animate-fadeIn">
+      <main className="flex-1 pt-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:pt-[calc(5rem+env(safe-area-inset-top,0px))] pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:pb-10 max-w-2xl w-full mx-auto px-3.5 sm:px-6 animate-fadeIn">
         {/* Compact Header */}
         <div className="mb-5 text-left">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold mb-1.5">

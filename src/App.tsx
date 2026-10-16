@@ -684,7 +684,7 @@ export function App() {
   // Dedicated Full-page Login View (42.uz style)
   if (currentView === 'login') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-[100dvh] bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <LoginPage
           onSuccess={handleAuthSuccess}
           onGoHome={navigateToHome}
@@ -712,7 +712,7 @@ export function App() {
       return null;
     }
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <ProfilePage
           userProfile={userProfile}
           unitProgressList={unitProgressList}
@@ -750,7 +750,7 @@ export function App() {
   // Dedicated Full-page Settings View
   if (currentView === 'settings') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <SettingsPage
           themeMode={themeMode}
           onSetThemeMode={handleSetThemeMode}
@@ -777,7 +777,7 @@ export function App() {
   // Dedicated Full-page Leaderboard View
   if (currentView === 'leaderboard') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <LeaderboardPage
           currentUser={userProfile}
           onGoHome={navigateToHome}
@@ -802,7 +802,7 @@ export function App() {
   // Dedicated Full-page Mistakes View
   if (currentView === 'mistakes') {
     return (
-      <div className={`${isDark ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
+      <div className={`${isDark ? 'dark' : ''} min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors`}>
         <MistakesPage
           onStartLearning={handleStartMistakesLearning}
           onGoHome={navigateToHome}

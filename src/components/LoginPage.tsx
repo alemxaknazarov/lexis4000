@@ -77,9 +77,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between transition-colors">
+    <div className="min-h-[100dvh] bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col justify-between transition-colors">
       {/* 1. Standard Top Navigation Bar (Identical height & logo placement to main Navbar) */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors pt-[env(safe-area-inset-top,0px)]">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
           {/* Brand Logo - exactly identical positioning */}
           <div
@@ -136,7 +136,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       </header>
 
       {/* 2. Main Login Form with comfortable space below fixed navbar */}
-      <main className="flex-1 pt-20 sm:pt-24 pb-12 sm:pb-20 flex flex-col items-center justify-center px-4 text-center animate-fadeIn">
+      <main className="flex-1 pt-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:pt-[calc(5rem+env(safe-area-inset-top,0px))] pb-12 sm:pb-20 flex flex-col items-center justify-center px-4 text-center animate-fadeIn">
         <div className="w-full max-w-md mx-auto flex flex-col items-center">
           {/* Central Brand Logo */}
           <div className="mb-6 select-none flex items-center justify-center transition-transform hover:scale-105">

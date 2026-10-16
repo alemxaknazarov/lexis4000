@@ -146,9 +146,9 @@ export const MistakesPage: React.FC<MistakesPageProps> = ({
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors selection:bg-rose-500/20">
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors selection:bg-rose-500/20">
       {/* 1. Standard Top Navigation Bar */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors pt-[env(safe-area-inset-top,0px)]">
         <div className="max-w-6xl mx-auto px-3.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
           {/* Left: Brand Logo */}
           <div
@@ -211,7 +211,7 @@ export const MistakesPage: React.FC<MistakesPageProps> = ({
       </header>
 
       {/* 2. Main Mistakes Page Content */}
-      <main className="flex-1 pt-20 sm:pt-24 pb-[max(9rem,calc(env(safe-area-inset-bottom)+7.5rem))] sm:pb-12 max-w-5xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
+      <main className="flex-1 pt-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:pt-[calc(5rem+env(safe-area-inset-top,0px))] pb-[max(9rem,calc(env(safe-area-inset-bottom)+7.5rem))] sm:pb-12 max-w-5xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
         {/* Hero Header Card */}
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/80 rounded-3xl p-6 sm:p-8 shadow-xs mb-6 relative overflow-hidden transition-colors">
           <div className="absolute -top-20 right-0 w-72 h-72 bg-rose-500/10 dark:bg-rose-500/8 rounded-full blur-3xl pointer-events-none" />

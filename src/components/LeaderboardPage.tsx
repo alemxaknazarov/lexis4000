@@ -89,9 +89,9 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
   const top3 = leaders[2];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors selection:bg-emerald-500/20">
+    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors selection:bg-emerald-500/20">
       {/* 1. Standard Top Navigation Bar (Identical height & logo placement to main Navbar) */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full backdrop-blur-md bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors pt-[env(safe-area-inset-top,0px)]">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
           {/* Left: Brand Logo (Always in consistent position) */}
           <div
@@ -126,7 +126,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
       </header>
 
       {/* 2. Main Leaderboard Page Content with Full Native Document Scroll */}
-      <main className="flex-1 pt-20 sm:pt-24 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:pb-10 max-w-4xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
+      <main className="flex-1 pt-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:pt-[calc(5rem+env(safe-area-inset-top,0px))] pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] sm:pb-10 max-w-4xl w-full mx-auto px-4 sm:px-6 animate-fadeIn">
         {/* Hero Banner */}
         <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-amber-500/10 border border-amber-300 dark:border-amber-700/60 shadow-md shadow-amber-500/10 mb-3 text-amber-500">
