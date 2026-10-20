@@ -212,8 +212,15 @@ export const UnitSelector: React.FC<UnitSelectorProps> = ({
     "The Mad Hatter"
   ];
 
+  const BOOK_7_UNIT_TITLES = [
+    "High-Impact Character & Leadership Adjectives (1-20)",
+    "Advanced Mindset & Precision Adjectives (21-34)"
+  ];
+
   const unitTitles =
-    bookNumber === 6
+    bookNumber === 7
+      ? BOOK_7_UNIT_TITLES
+      : bookNumber === 6
       ? BOOK_6_UNIT_TITLES
       : bookNumber === 5
       ? BOOK_5_UNIT_TITLES
@@ -224,6 +231,8 @@ export const UnitSelector: React.FC<UnitSelectorProps> = ({
       : bookNumber === 2
       ? BOOK_2_UNIT_TITLES
       : BOOK_1_UNIT_TITLES;
+
+  const totalUnits = bookNumber === 7 ? 2 : 30;
 
   return (
     <div className="pt-4 sm:pt-6 pb-2 sm:pb-4 px-3.5 sm:px-6 max-w-6xl mx-auto">
@@ -236,27 +245,28 @@ export const UnitSelector: React.FC<UnitSelectorProps> = ({
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2.5 py-0.5 rounded-full mb-1">
               <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-              <span>Book {bookNumber}</span>
+              <span>{bookNumber === 7 ? "Master Vocabulary" : `Book ${bookNumber}`}</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Unitlar ro‘yxati (1 – 30)
+              {bookNumber === 7 ? "Master Vocabulary Unitlari (1 – 2)" : "Unitlar ro‘yxati (1 – 30)"}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              4000 Essential English Words • Paul Nation
+              {bookNumber === 7 ? "IELTS Writing & Speaking 8.0+ Adjectives • Master IELTS" : "4000 Essential English Words • Paul Nation"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Grid of 30 units */}
+      {/* Grid of units */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {Array.from({ length: 30 }).map((_, index) => {
+        {Array.from({ length: totalUnits }).map((_, index) => {
           const unitNumber = index + 1;
           const title = unitTitles[index] || `Vocabulary Set ${unitNumber}`;
+          const totalWordsInUnit = bookNumber === 7 ? (unitNumber === 1 ? 20 : 14) : 20;
           const progress = unitProgressList.find((p) => p.unit_number === unitNumber && p.book_number === bookNumber);
           const accuracy = progress?.accuracy_percentage || 0;
           const isCompleted = progress?.is_completed || accuracy >= 100;
-          const learnedWordsCount = progress?.learned_words_count ?? Math.round((accuracy / 100) * 20);
+          const learnedWordsCount = progress?.learned_words_count ?? Math.round((accuracy / 100) * totalWordsInUnit);
 
           return (
             <div
@@ -286,7 +296,7 @@ export const UnitSelector: React.FC<UnitSelectorProps> = ({
                   </span>
                 ) : (
                   <span className="text-[10px] text-slate-400 font-medium">
-                    20 so‘z
+                    {totalWordsInUnit} so‘z
                   </span>
                 )}
               </div>
@@ -297,9 +307,9 @@ export const UnitSelector: React.FC<UnitSelectorProps> = ({
                 </h4>
                 <p className="text-[11px] text-slate-400">
                   {isCompleted
-                    ? 'Tugallangan (20/20)'
+                    ? `Tugallangan (${totalWordsInUnit}/${totalWordsInUnit})`
                     : accuracy > 0
-                    ? `${learnedWordsCount} / 20 so‘z o‘rganildi`
+                    ? `${learnedWordsCount} / ${totalWordsInUnit} so‘z o‘rganildi`
                     : 'Boshlanmagan'}
                 </p>
 

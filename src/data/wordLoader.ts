@@ -8,7 +8,7 @@ const bookCache = new Map<number, Word[]>();
  * and loads books asynchronously when needed.
  */
 export async function loadBookWords(bookNumber: number): Promise<Word[]> {
-  const bNum = Math.max(1, Math.min(6, bookNumber || 1));
+  const bNum = Math.max(1, Math.min(7, bookNumber || 1));
 
   if (bookCache.has(bNum)) {
     return bookCache.get(bNum)!;
@@ -45,6 +45,11 @@ export async function loadBookWords(bookNumber: number): Promise<Word[]> {
     case 6: {
       const m = await import('./book6Words');
       words = m.BOOK_6_WORDS;
+      break;
+    }
+    case 7: {
+      const m = await import('./book7Words');
+      words = m.BOOK_7_WORDS;
       break;
     }
     default: {

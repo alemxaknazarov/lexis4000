@@ -85,6 +85,15 @@ const BOOK_THEMES: Record<number, BookTheme> = {
     puzzleTint: '#ca8a04',
     numberColor: '#dc2626',
   },
+  7: {
+    name: 'Master Vocabulary',
+    accentHex: '#0d9488',
+    gradientStart: '#0f766e',
+    gradientEnd: '#134e4a',
+    waveColor: '#14b8a6',
+    puzzleTint: '#ca8a04',
+    numberColor: '#f59e0b',
+  },
 };
 
 export const BookCover: React.FC<BookCoverProps> = ({

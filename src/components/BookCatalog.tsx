@@ -23,6 +23,7 @@ export const BookCatalog: React.FC<BookCatalogProps> = ({
     { num: 4, cefr: 'B2', ielts: '6.5 - 7.5', desc: 'Upper-Intermediate Power Words' },
     { num: 5, cefr: 'B2+', ielts: '7.5 - 8.5', desc: 'Advanced Academic Vocabulary' },
     { num: 6, cefr: 'C1', ielts: '8.5 - 9.0', desc: 'Master Lexicon (IELTS 8.5+)' },
+    { num: 7, cefr: 'C1-C2', ielts: '8.5 - 9.0+', desc: 'Master Vocabulary (Elite Adjectives & Collocations)' },
   ];
 
   return (
@@ -86,7 +87,7 @@ export const BookCatalog: React.FC<BookCatalogProps> = ({
 
                   <div className="mt-2 text-[10px] sm:text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>30 ta Unit • 600 ta so‘z</span>
+                    <span>{book.total_units || (book.book_number === 7 ? 2 : 30)} ta Unit • {book.book_number === 7 ? '34 ta so‘z' : '600 ta so‘z'}</span>
                   </div>
                 </div>
               </div>
@@ -94,7 +95,7 @@ export const BookCatalog: React.FC<BookCatalogProps> = ({
               {/* Progress and Action Footer */}
               <div className="pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800/80">
                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
-                  <span>O‘zlashtirish: {completedUnits} / {book.total_units || 30} unit</span>
+                  <span>O‘zlashtirish: {completedUnits} / {book.total_units || (book.book_number === 7 ? 2 : 30)} unit</span>
                   <span className="font-bold text-slate-800 dark:text-slate-200">{percent}%</span>
                 </div>
 
@@ -107,7 +108,9 @@ export const BookCatalog: React.FC<BookCatalogProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                  <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">Paul Nation</span>
+                  <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
+                    {book.book_number === 7 ? 'Master IELTS' : 'Paul Nation'}
+                  </span>
                   <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform">
                     <span>Ochish</span>
                     <ChevronRight className="w-3.5 h-3.5" />

@@ -170,6 +170,7 @@ export function App() {
     { id: 4, book_number: 4, title: 'Book 4 - Upper-Intermediate', total_units: 30 },
     { id: 5, book_number: 5, title: 'Book 5 - Advanced', total_units: 30 },
     { id: 6, book_number: 6, title: 'Book 6 - Master', total_units: 30 },
+    { id: 7, book_number: 7, title: 'Master Vocabulary', total_units: 2 },
   ]);
   const [allWords, setAllWords] = useState<Word[]>([]);
 
@@ -305,7 +306,15 @@ export function App() {
       try {
         const { data, error } = await supabase.from('books').select('*').order('book_number');
         if (!error && data && data.length > 0) {
-          setBooks(data);
+          const hasBook7 = data.some((b) => b.book_number === 7);
+          if (hasBook7) {
+            setBooks(data);
+          } else {
+            setBooks([
+              ...data,
+              { id: 7, book_number: 7, title: 'Master Vocabulary', total_units: 2 }
+            ]);
+          }
         }
       } catch (e) {
         console.warn('Using local books config');
@@ -1152,9 +1161,10 @@ export function App() {
                   unitLearnedCount={unitLearnedCount}
                   isUnitCompleted={isUnitCompleted}
                   onNextUnit={() => {
+                    const maxUnits = selectedBook === 7 ? 2 : 30;
                     if (isMistakesSession) {
                       navigate(routes.mistakes());
-                    } else if (selectedUnit < 30) {
+                    } else if (selectedUnit < maxUnits) {
                       navigate(routes.unit(selectedBook, selectedUnit + 1));
                     } else {
                       navigate(routes.catalog());

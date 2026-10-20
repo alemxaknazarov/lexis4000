@@ -72,7 +72,7 @@ export function resolveRoute(pathname: string, userProfile: UserProfile | null):
     const unitNum = parseInt(learnMatch[2], 10);
 
     // Validate Book
-    if (bookNum < 1 || bookNum > 6) {
+    if (bookNum < 1 || bookNum > 7) {
       return { view: 'catalog', bookNumber: 1, unitNumber: 1, redirectUrl: '/' };
     }
     // Validate Unit
@@ -100,7 +100,7 @@ export function resolveRoute(pathname: string, userProfile: UserProfile | null):
     const unitNum = parseInt(unitMatch[2], 10);
 
     // Validate Book
-    if (bookNum < 1 || bookNum > 6) {
+    if (bookNum < 1 || bookNum > 7) {
       return { view: 'catalog', bookNumber: 1, unitNumber: 1, redirectUrl: '/' };
     }
     // Validate Unit
@@ -117,7 +117,7 @@ export function resolveRoute(pathname: string, userProfile: UserProfile | null):
     const bookNum = parseInt(bookMatch[1], 10);
 
     // Validate Book
-    if (bookNum < 1 || bookNum > 6) {
+    if (bookNum < 1 || bookNum > 7) {
       return { view: 'catalog', bookNumber: 1, unitNumber: 1, redirectUrl: '/' };
     }
 
