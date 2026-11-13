@@ -1,22 +1,195 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="LEXIS 4000" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8fafc" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#090d16" />
-    <meta name="theme-color" content="#090d16" id="theme-color-meta" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
-    <title>LEXIS 4000 — 4000 Essential English Words Master Platform</title>
-    <meta name="description" content="Neyrolingvistik 5 bosqichli so'z yodlash va mustahkamlash tizimi" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lexis 4000 &bull; Tizimda Ta'mirlash Ishlari</title>
+  <meta name="description" content="Lexis 4000 platformasida rejaviy modernizatsiya va ta'mirlash ishlari olib borilmoqda. Tez orada qaytamiz." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='16 18 22 12 16 6'></polyline><polyline points='8 6 2 12 8 18'></polyline></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="background-grid"></div>
+  <div class="ambient-glow glow-cyan"></div>
+  <div class="ambient-glow glow-emerald"></div>
+
+  <div class="page-container">
+    <!-- Navbar / Top Header -->
+    <header class="top-nav">
+      <div class="brand">
+        <span class="brand-bracket">&lt;</span>
+        <span class="brand-name">LEXIS::4000</span>
+        <span class="brand-bracket">/&gt;</span>
+      </div>
+      <div class="nav-status-badge">
+        <span class="pulse-dot"></span>
+        <span class="status-text">MAINTENANCE MODE</span>
+      </div>
+      <div class="nav-clock" id="live-clock">
+        SYS.TIME: --:--:--
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Hero Header -->
+      <section class="hero-section">
+        <div class="badge-pill">
+          <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>HTTP 503 &bull; SERVICE TEMPORARILY UNAVAILABLE</span>
+        </div>
+
+        <h1 class="hero-title">
+          Hozirda tizimda <span class="gradient-text">ta'mirlash ishlari</span> ketmoqda
+        </h1>
+        <p class="hero-subtitle">
+          Lexis 4000 platformasi arxitekturasi va ma'lumotlar bazasi optimizatsiya qilinmoqda. Barcha hisoblar va natijalar xavfsiz holatda saqlanmoqda.
+        </p>
+      </section>
+
+      <!-- Code Window / Terminal Mockup -->
+      <section class="window-card">
+        <div class="window-header">
+          <div class="window-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="window-tab">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span>system_status.ts</span>
+          </div>
+          <div class="window-meta">
+            <span class="meta-tag">UTF-8</span>
+            <span class="meta-tag readonly">READONLY</span>
+          </div>
+        </div>
+
+        <!-- Code Block -->
+        <div class="code-viewport">
+          <pre><code><span class="line"><span class="line-num">01</span><span class="comment">// LEXIS-4000 CORE ARCHITECTURE & SERVICES</span></span>
+<span class="line"><span class="line-num">02</span><span class="keyword">const</span> <span class="variable">systemDiagnostics</span> = {</span>
+<span class="line"><span class="line-num">03</span>  <span class="property">statusCode</span>: <span class="number">503</span>,</span>
+<span class="line"><span class="line-num">04</span>  <span class="property">status</span>: <span class="string">"UNDER_MAINTENANCE"</span>,</span>
+<span class="line"><span class="line-num">05</span>  <span class="property">message</span>: <span class="string">"Tizimda profilaktika va modernizatsiya ketmoqda"</span>,</span>
+<span class="line"><span class="line-num">06</span>  <span class="property">dataSecurity</span>: <span class="string">"100% PRESERVED & ENCRYPTED"</span>,</span>
+<span class="line"><span class="line-num">07</span>  <span class="property">estimatedUptime</span>: <span class="string">"Tez orada qayta ishga tushadi"</span>,</span>
+<span class="line"><span class="line-num">08</span>  <span class="property">pipeline</span>: [</span>
+<span class="line"><span class="line-num">09</span>    <span class="string">"✓ Database indexing & backup integrity checked"</span>,</span>
+<span class="line"><span class="line-num">10</span>    <span class="string">"⚡ Vocabulary high-speed edge cluster upgrading"</span>,</span>
+<span class="line"><span class="line-num">11</span>    <span class="string">"⏳ UI & performance latency reduction"</span></span>
+<span class="line"><span class="line-num">12</span>  ]</span>
+<span class="line"><span class="line-num">13</span>};</span>
+<span class="line"><span class="line-num">14</span></span>
+<span class="line"><span class="line-num">15</span><span class="keyword">export default</span> <span class="variable">systemDiagnostics</span>;</span></code></pre>
+        </div>
+
+        <!-- Terminal Log Console -->
+        <div class="terminal-tray">
+          <div class="terminal-tray-header">
+            <div class="terminal-title">
+              <span class="term-arrow">&gt;_</span>
+              <span>CONSOLE LOG STREAM</span>
+            </div>
+            <span class="ping-indicator" id="latency-val">PING: 18ms</span>
+          </div>
+          <div class="terminal-logs" id="terminal-logs">
+            <div class="log-line"><span class="log-time">[SYS]</span> <span class="log-info">Profilaktika rejimi faollashtirildi. Foydalanuvchi sessiyalari xavfsiz yopildi.</span></div>
+            <div class="log-line"><span class="log-time">[DAT]</span> <span class="log-success">4000 ta so'zlar bazasi va shaxsiy natijalar butunligi tekshirildi (100% ok).</span></div>
+            <div class="log-line"><span class="log-time">[WRN]</span> <span class="log-warn">Klaster yangilanishi davom etmoqda. API so'rovlari vaqtinchalik to'xtatilgan.</span></div>
+            <div class="log-line active-line"><span class="log-time">[RUN]</span> <span class="log-msg">Serverlar tez orada to'liq quvvatda qayta ishga tushiriladi...</span><span class="cursor">▋</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Status Metric HUD -->
+      <section class="hud-grid">
+        <div class="hud-card">
+          <div class="hud-header">
+            <span class="hud-label">TIZIM HOLATI</span>
+            <span class="hud-badge amber">503</span>
+          </div>
+          <div class="hud-value text-amber">Ta'mirlashda</div>
+          <p class="hud-desc">Profilaktika ishlari bajarilmoqda</p>
+        </div>
+
+        <div class="hud-card">
+          <div class="hud-header">
+            <span class="hud-label">MA'LUMOTLAR</span>
+            <span class="hud-badge emerald">XAVFSIZ</span>
+          </div>
+          <div class="hud-value text-emerald">100% Himoyalangan</div>
+          <p class="hud-desc">Lug'at va foydalanuvchi natijalari butun</p>
+        </div>
+
+        <div class="hud-card">
+          <div class="hud-header">
+            <span class="hud-label">PLATFORMA</span>
+            <span class="hud-badge cyan">CORE</span>
+          </div>
+          <div class="hud-value text-cyan">Lexis 4000</div>
+          <p class="hud-desc">Yangilangan arxitektura tayyorlanmoqda</p>
+        </div>
+
+        <div class="hud-card">
+          <div class="hud-header">
+            <span class="hud-label">QAYTA TIKLANISH</span>
+            <span class="hud-badge purple">ETA</span>
+          </div>
+          <div class="hud-value text-purple">Tez Fursatda</div>
+          <p class="hud-desc">Tez orada tizim to'liq ishga tushadi</p>
+        </div>
+      </section>
+
+      <!-- Action Area -->
+      <section class="actions-section">
+        <button class="btn btn-primary" id="refresh-btn">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+          <span id="refresh-btn-text">Qayta tekshirish</span>
+        </button>
+
+        <button class="btn btn-secondary" id="ping-btn">
+          <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="2"></circle>
+            <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path>
+          </svg>
+          <span>Server Ping Test</span>
+        </button>
+      </section>
+
+      <!-- Notification Toast -->
+      <div class="toast" id="toast">
+        <span class="toast-indicator"></span>
+        <span id="toast-message">Tizim hali profilaktikada. Iltimos, birozdan so'ng tekshiring.</span>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-left">
+        <span>&copy; 2026 Lexis 4000. Barcha huquqlar himoyalangan.</span>
+      </div>
+      <div class="footer-right">
+        <span class="footer-badge">INFRASTRUCTURE_REBOOT</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
 </html>
